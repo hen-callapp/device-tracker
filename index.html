@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Device Tracker — CallHub</title>
+<style>
+  /* ---- semantic tokens: light (default) ---- */
+  :root {
+    color-scheme: light;
+    --bg: #f4f7fa;
+    --surface: #ffffff;
+    --surface-2: #f1f5f9;
+    --fg: #0f172a;
+    --muted: #5b6b7f;
+    --border: #e2e8f0;
+    --primary: #0288D1;
+    --primary-hover: #0277b8;
+    --on-primary: #ffffff;
+    --ring: #0288D1;
+    --danger: #dc2626;
+    --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 4px 12px rgba(15, 23, 42, .05);
+    --shadow-lg: 0 24px 60px rgba(2, 6, 23, .25);
+    --header-grad: linear-gradient(135deg, #0288D1, #65D4EA);
+    --badge-available-bg: #dcfce7;  --badge-available-fg: #15803d;
+    --badge-checked_out-bg: #e0f2fe; --badge-checked_out-fg: #026aa2;
+    --badge-lost-bg: #fee2e2;       --badge-lost-fg: #b91c1c;
+    --badge-retired-bg: #f1f5f9;    --badge-retired-fg: #64748b;
+  }
+  /* ---- dark: desaturated tonal variants, not inversions ---- */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0b1220;
+    --surface: #121a2b;
+    --surface-2: #1a2438;
+    --fg: #e6edf6;
+    --muted: #93a5bc;
+    --border: #253453;
+    --primary: #41b9ea;
+    --primary-hover: #63c8f0;
+    --on-primary: #06121c;
+    --ring: #41b9ea;
+    --danger: #f87171;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 14px rgba(0, 0, 0, .35);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, .6);
+    --header-grad: linear-gradient(135deg, #075e8f, #123a52);
+    --badge-available-bg: rgba(34, 197, 94, .16);   --badge-available-fg: #4ade80;
+    --badge-checked_out-bg: rgba(56, 189, 248, .16); --badge-checked_out-fg: #67d3f5;
+    --badge-lost-bg: rgba(248, 113, 113, .16);      --badge-lost-fg: #f89b9b;
+    --badge-retired-bg: rgba(148, 163, 184, .14);   --badge-retired-fg: #a5b4c8;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg); font-size: 14px; line-height: 1.5;
+    font-family: Poppins, Inter, -apple-system, "Segoe UI", Roboto, sans-serif;
+    transition: background-color .25s ease, color .25s ease;
+  }
+  svg.i { width: 18px; height: 18px; stroke: currentColor; fill: none;
+          stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* ---- header ---- */
+  header { background: var(--header-grad); color: #fff; padding: 14px 24px;
+           display: flex; align-items: center; gap: 12px; }
+  header .logo { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;
+                 background: rgba(255,255,255,.18); border-radius: 10px; }
+  header .logo svg.i { width: 20px; height: 20px; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .01em; }
+  header .sub { font-size: 12px; opacity: .85; margin-top: -2px; }
+  header .right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  header .who { font-size: 12.5px; opacity: .95; background: rgba(255,255,255,.16);
+                padding: 5px 12px; border-radius: 999px; }
+  #themeBtn { background: rgba(255,255,255,.16); border: 0; color: #fff; width: 36px; height: 36px;
+              border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+              transition: background-color .18s ease; }
+  #themeBtn:hover { background: rgba(255,255,255,.3); }
+
+  /* ---- nav ---- */
+  nav { display: flex; gap: 2px; padding: 0 16px; background: var(--surface);
+        border-bottom: 1px solid var(--border); overflow-x: auto;
+        transition: background-color .25s ease, border-color .25s ease; }
+  nav button { border: 0; background: none; padding: 13px 14px; font: inherit; cursor: pointer;
+               color: var(--muted); border-bottom: 2px solid transparent;
+               display: flex; align-items: center; gap: 7px; white-space: nowrap;
+               transition: color .18s ease, border-color .18s ease; }
+  nav button svg.i { width: 16px; height: 16px; }
+  nav button:hover { color: var(--fg); }
+  nav button.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+  main { padding: 20px 24px 48px; max-width: 1400px; margin: 0 auto; }
+
+  /* ---- toolbar ---- */
+  .bar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+  .searchwrap { position: relative; flex: 1; min-width: 220px; }
+  .searchwrap svg.i { position: absolute; left: 11px; top: 50%; translate: 0 -50%;
+                      width: 16px; height: 16px; color: var(--muted); pointer-events: none; }
+  input[type=search], input[type=password], select, dialog input, dialog select {
+    padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit;
+    background: var(--surface); color: var(--fg); min-height: 40px;
+    transition: border-color .18s ease, background-color .25s ease, box-shadow .18s ease;
+  }
+  input[type=search] { width: 100%; padding-left: 34px; }
+  input:focus-visible, select:focus-visible, button:focus-visible {
+    outline: 2px solid var(--ring); outline-offset: 2px; }
+  input:hover, select:hover { border-color: var(--muted); }
+  .check { display: flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer;
+           user-select: none; padding: 6px 4px; }
+  .check input { accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer; }
+  .spacer { flex: 1; }
+
+  /* ---- buttons ---- */
+  button.primary, button.ghost {
+    display: inline-flex; align-items: center; gap: 7px; justify-content: center;
+    border-radius: 8px; font: inherit; cursor: pointer; min-height: 38px; padding: 8px 14px;
+    transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .12s ease;
+  }
+  button.primary { background: var(--primary); color: var(--on-primary); border: 0; font-weight: 600; }
+  button.primary:hover { background: var(--primary-hover); }
+  button.ghost { background: var(--surface); border: 1px solid var(--border); color: var(--fg); }
+  button.ghost:hover { border-color: var(--muted); background: var(--surface-2); }
+  button.primary:active, button.ghost:active { transform: scale(.97); }
+  button.ghost.danger { color: var(--danger); }
+  button.ghost.danger:hover { border-color: var(--danger); }
+  button svg.i { width: 15px; height: 15px; }
+
+  /* ---- table ---- */
+  .tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border);
+               border-radius: 12px; box-shadow: var(--shadow);
+               transition: background-color .25s ease, border-color .25s ease; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+       font-weight: 600; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+  tbody tr { transition: background-color .15s ease; }
+  tbody tr:hover { background: var(--surface-2); }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; }
+  td.actions { text-align: right; }
+  td.actions button { margin-left: 6px; font-size: 12.5px; min-height: 32px; padding: 4px 11px; }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+           border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .badge.available   { background: var(--badge-available-bg);   color: var(--badge-available-fg); }
+  .badge.checked_out { background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg); }
+  .badge.lost        { background: var(--badge-lost-bg);        color: var(--badge-lost-fg); }
+  .badge.retired     { background: var(--badge-retired-bg);     color: var(--badge-retired-fg); }
+
+  .chip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+          border-radius: 50%; background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg);
+          font-size: 10.5px; font-weight: 700; margin-right: 7px; vertical-align: middle; }
+  .muted { color: var(--muted); }
+  .empty { padding: 40px 24px; text-align: center; color: var(--muted); white-space: normal; }
+  .empty svg.i { width: 28px; height: 28px; display: block; margin: 0 auto 10px; opacity: .5; }
+
+  /* ---- dialogs ---- */
+  dialog { border: 0; border-radius: 14px; padding: 0; box-shadow: var(--shadow-lg);
+           min-width: 360px; max-width: 92vw; background: var(--surface); color: var(--fg); }
+  dialog::backdrop { background: rgba(2, 6, 23, .55); backdrop-filter: blur(2px); }
+  dialog[open] { animation: pop .2s ease-out; }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+  dialog form { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+  dialog h2 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
+  dialog label { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; font-weight: 500; }
+  dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+
+  /* ---- toast ---- */
+  #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(6px);
+           background: var(--fg); color: var(--bg); padding: 11px 20px; border-radius: 10px;
+           box-shadow: var(--shadow-lg); opacity: 0; transition: opacity .22s ease, transform .22s ease;
+           pointer-events: none; max-width: 90vw; font-weight: 500; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---- token gate ---- */
+  #gate { max-width: 520px; margin: 56px auto; background: var(--surface); border: 1px solid var(--border);
+          border-radius: 14px; padding: 30px; box-shadow: var(--shadow); }
+  #gate .gate-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--badge-checked_out-bg);
+                     color: var(--primary); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  #gate h2 { margin: 0 0 6px; }
+  #gate ol { line-height: 1.8; padding-left: 20px; color: var(--muted); }
+  #gate ol b { color: var(--fg); }
+  #gate input { width: 100%; margin: 12px 0 4px; }
+  #gate .err { color: var(--danger); font-size: 13px; min-height: 20px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, ::backdrop { transition: none !important; animation: none !important; }
+  }
+  @media (max-width: 600px) {
+    header, main { padding-left: 14px; padding-right: 14px; }
+    dialog { min-width: 0; width: 92vw; }
+  }
+</style>
+</head>
+<body>
+<svg hidden aria-hidden="true" style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-device" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></symbol>
+</svg>
+
+<header>
+  <span class="logo"><svg class="i"><use href="#i-device"/></svg></span>
+  <div>
+    <h1>Device Tracker</h1>
+    <div class="sub">CallHub · mobile test-device pool</div>
+  </div>
+  <div class="right">
+    <span class="who" id="who" hidden></span>
+    <button id="themeBtn" aria-label="Toggle dark mode" title="Toggle dark mode">
+      <svg class="i"><use id="themeIcon" href="#i-moon"/></svg>
+    </button>
+  </div>
+</header>
+<nav id="tabs" hidden>
+  <button data-tab="devices" class="active"><svg class="i"><use href="#i-device"/></svg>Devices</button>
+  <button data-tab="history"><svg class="i"><use href="#i-history"/></svg>History</button>
+  <button data-tab="workers"><svg class="i"><use href="#i-users"/></svg>Workers</button>
+  <button data-tab="settings"><svg class="i"><use href="#i-settings"/></svg>Settings</button>
+</nav>
+<main>
+  <!-- token gate -->
+  <section id="gate">
+    <div class="gate-icon"><svg class="i"><use href="#i-key"/></svg></div>
+    <h2>Connect to GitHub</h2>
+    <p class="muted">This app stores its data in the private CallHub repo. Paste your fine-grained personal access token to start.</p>
+    <ol>
+      <li>GitHub → Settings → Developer settings → <b>Fine-grained tokens</b> → Generate new token</li>
+      <li>Resource owner: <b>CallApp-Software-Ltd</b>, Repository access: <b>Only CallHub</b></li>
+      <li>Permissions → Repository → <b>Contents: Read and write</b></li>
+    </ol>
+    <input id="tokenInput" type="password" placeholder="github_pat_…" autocomplete="off" aria-label="Personal access token">
+    <div class="err" id="gateErr" role="alert"></div>
+    <button class="primary" id="connectBtn">Connect</button>
+  </section>
+
+  <!-- devices -->
+  <section id="tab-devices" hidden>
+    <div class="bar">
+      <span class="searchwrap"><svg class="i"><use href="#i-search"/></svg>
+        <input type="search" id="devSearch" placeholder="Search name, model, OS, serial, holder…" aria-label="Search devices"></span>
+      <select id="devStatus" aria-label="Filter by status">
+        <option value="">All statuses</option>
+        <option value="available">Available</option>
+        <option value="checked_out">Checked out</option>
+        <option value="lost">Lost</option>
+      </select>
+      <label class="check"><input type="checkbox" id="showRetired"> show retired</label>
+      <span class="spacer"></span>
+      <button class="ghost" id="refreshBtn"><svg class="i"><use href="#i-refresh"/></svg>Refresh</button>
+      <button class="primary" id="addDeviceBtn"><svg class="i"><use href="#i-plus"/></svg>Add device</button>
+    </div>
+    <div class="tablewrap"><table id="devTable">
+      <thead><tr><th>Device</th><th>Model</th><th>OS</th><th>Serial / IMEI</th><th>Status</th><th>Holder</th><th>Since</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <!-- history -->
+  <section id="tab-history" hidden>
+    <div class="bar">
+      <span class="searchwrap"><svg class="i"><use href="#i-search"/></svg>
+        <input type="search" id="histSearch" placeholder="Search notes, names…" aria-label="Search history"></span>
+      <select id="histDevice" aria-label="Filter by device"><option value="">All devices</option></select>
+      <select id="histWorker" aria-label="Filter by worker"><option value="">All workers</option></select>
+    </div>
+    <div class="tablewrap"><table id="histTable">
+      <thead><tr><th>When</th><th>Action</th><th>Device</th><th>Worker</th><th>By</th><th>Note</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <!-- workers -->
+  <section id="tab-workers" hidden>
+    <div class="bar">
+      <span class="spacer"></span>
+      <button class="primary" id="addWorkerBtn"><svg class="i"><use href="#i-plus"/></svg>Add worker</button>
+    </div>
+    <div class="tablewrap"><table id="workerTable">
+      <thead><tr><th>Name</th><th>Currently holds</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <!-- settings -->
+  <section id="tab-settings" hidden>
+    <p>Connected as <b id="whoSettings"></b>.</p>
+    <button class="ghost danger" id="disconnectBtn">Disconnect (forget token)</button>
+  </section>
+</main>
+
+<!-- add/edit device -->
+<dialog id="deviceDialog"><form method="dialog" id="deviceForm">
+  <h2 id="deviceDialogTitle">Add device</h2>
+  <label>Name <input name="name" required placeholder="Pixel 7 #1"></label>
+  <label>Model <input name="model" required placeholder="Google Pixel 7"></label>
+  <label>OS version <input name="os" required placeholder="Android 14"></label>
+  <label>Serial / IMEI <input name="serial" required></label>
+  <div class="row"><button class="ghost" value="cancel" formnovalidate>Cancel</button>
+  <button class="primary" value="ok">Save</button></div>
+</form></dialog>
+
+<!-- checkout -->
+<dialog id="checkoutDialog"><form method="dialog" id="checkoutForm">
+  <h2 id="checkoutTitle">Check out</h2>
+  <label>Worker <select name="workerId" required id="checkoutWorker"></select></label>
+  <label>Note (optional) <input name="note" placeholder="e.g. 5.12 regression run"></label>
+  <div class="row"><button class="ghost" value="cancel" formnovalidate>Cancel</button>
+  <button class="primary" value="ok">Check out</button></div>
+</form></dialog>
+
+<!-- generic action (check-in / lost / found / retire) -->
+<dialog id="actionDialog"><form method="dialog" id="actionForm">
+  <h2 id="actionTitle"></h2>
+  <label>Note (optional) <input name="note"></label>
+  <div class="row"><button class="ghost" value="cancel" formnovalidate>Cancel</button>
+  <button class="primary" value="ok" id="actionConfirm">Confirm</button></div>
+</form></dialog>
+
+<!-- add worker -->
+<dialog id="workerDialog"><form method="dialog" id="workerForm">
+  <h2>Add worker</h2>
+  <label>Full name <input name="name" required placeholder="Dana Levi"></label>
+  <div class="row"><button class="ghost" value="cancel" formnovalidate>Cancel</button>
+  <button class="primary" value="ok">Add</button></div>
+</form></dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+const OWNER = 'CallApp-Software-Ltd', REPO = 'CallHub', DATA_PATH = 'apps/device-tracker/data.json';
+const API = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${DATA_PATH}`;
+
+let state = null, sha = null, login = null;
+const $ = s => document.querySelector(s);
+const token = () => localStorage.getItem('dt_token');
+
+// ---------- theme ----------
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem('dt_theme', t);
+  $('#themeIcon').setAttribute('href', t === 'dark' ? '#i-sun' : '#i-moon');
+}
+applyTheme(localStorage.getItem('dt_theme') ??
+  (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+$('#themeBtn').onclick = () =>
+  applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+// ---------- pure domain mutations (validated; used by app and self-test) ----------
+const now = () => new Date().toISOString();
+const uid = p => p + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const ev = (s, type, fields) => s.events.push({ id: uid('e'), ts: now(), type, by: login, ...fields });
+const dev = (s, id) => { const d = s.devices.find(d => d.id === id); if (!d) throw Error('device not found'); return d; };
+
+const mutations = {
+  addDevice(s, f) {
+    const d = { id: uid('d'), name: f.name, model: f.model, os: f.os, serial: f.serial,
+                status: 'available', holderId: null, heldSince: null };
+    s.devices.push(d);
+    ev(s, 'device-added', { deviceId: d.id, note: `${f.name} (${f.model})` });
+  },
+  editDevice(s, id, f) {
+    const d = dev(s, id);
+    Object.assign(d, { name: f.name, model: f.model, os: f.os, serial: f.serial });
+    ev(s, 'device-edited', { deviceId: id });
+  },
+  addWorker(s, name) {
+    s.workers.push({ id: uid('w'), name });
+    ev(s, 'worker-added', { note: name });
+  },
+  checkout(s, deviceId, workerId, note) {
+    const d = dev(s, deviceId);
+    if (d.status !== 'available') throw Error(`cannot check out a ${d.status} device`);
+    if (!s.workers.some(w => w.id === workerId)) throw Error('worker not found');
+    d.status = 'checked_out'; d.holderId = workerId; d.heldSince = now();
+    ev(s, 'checkout', { deviceId, workerId, note });
+  },
+  checkin(s, deviceId, note) {
+    const d = dev(s, deviceId);
+    if (d.status !== 'checked_out') throw Error('device is not checked out');
+    ev(s, 'checkin', { deviceId, workerId: d.holderId, note });
+    d.status = 'available'; d.holderId = null; d.heldSince = null;
+  },
+  // lost keeps holderId + heldSince — that fact IS the loss investigation (see CONTEXT.md)
+  markLost(s, deviceId, note) {
+    const d = dev(s, deviceId);
+    if (d.status === 'lost' || d.status === 'retired') throw Error(`device is already ${d.status}`);
+    d.status = 'lost';
+    ev(s, 'lost', { deviceId, workerId: d.holderId, note });
+  },
+  markFound(s, deviceId, note) {
+    const d = dev(s, deviceId);
+    if (d.status !== 'lost') throw Error('device is not lost');
+    ev(s, 'found', { deviceId, workerId: d.holderId, note });
+    d.status = 'available'; d.holderId = null; d.heldSince = null;
+  },
+  retire(s, deviceId, note) {
+    const d = dev(s, deviceId);
+    if (d.status === 'checked_out') throw Error('check the device in first');
+    if (d.status === 'retired') throw Error('already retired');
+    d.status = 'retired'; d.holderId = null; d.heldSince = null;
+    ev(s, 'retired', { deviceId, note });
+  },
+};
+
+// ---------- GitHub I/O ----------
+const b64decode = b64 => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\n/g, '')), c => c.charCodeAt(0)));
+function b64encode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+const headers = () => ({ Authorization: `Bearer ${token()}`, Accept: 'application/vnd.github+json',
+                         'X-GitHub-Api-Version': '2022-11-28' });
+
+async function loadData() {
+  const res = await fetch(API, { headers: headers(), cache: 'no-store' });
+  if (!res.ok) throw Error(res.status === 401 || res.status === 403
+    ? 'Token rejected — check its permissions (Contents: read/write on CallHub).'
+    : `Failed to load data (HTTP ${res.status})`);
+  const j = await res.json();
+  sha = j.sha;
+  state = JSON.parse(b64decode(j.content));
+  renderAll();
+}
+
+// compare-and-swap commit: on SHA conflict, reload and re-apply the mutation
+async function commit(message, mutate) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const next = structuredClone(state);
+    mutate(next); // throws on invalid action → surfaces as toast
+    const res = await fetch(API, {
+      method: 'PUT', headers: headers(),
+      body: JSON.stringify({ message: `tracker: ${message}`, sha, content: b64encode(JSON.stringify(next, null, 2)) }),
+    });
+    if (res.ok) {
+      sha = (await res.json()).content.sha;
+      state = next;
+      renderAll();
+      toast(message);
+      return;
+    }
+    if (res.status === 409 || res.status === 422) { await loadData(); continue; } // someone else wrote first
+    throw Error(`Save failed (HTTP ${res.status})`);
+  }
+  throw Error('Save failed after 3 attempts — refresh and try again.');
+}
+
+const act = fn => fn().catch(e => toast('⚠ ' + e.message));
+
+// ---------- rendering ----------
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const workerName = id => state.workers.find(w => w.id === id)?.name ?? '?';
+const initials = name => name.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+const fmt = ts => ts ? new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+const STATUS_LABEL = { available: 'Available', checked_out: 'Checked out', lost: 'Lost', retired: 'Retired' };
+const EVENT_LABEL = { 'device-added': 'Device added', 'device-edited': 'Device edited', checkout: 'Checkout',
+                      checkin: 'Check-in', lost: 'Marked lost', found: 'Marked found', retired: 'Retired',
+                      'worker-added': 'Worker added' };
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+const emptyRow = (cols, msg) =>
+  `<tr><td colspan="${cols}" class="empty"><svg class="i"><use href="#i-device"/></svg>${msg}</td></tr>`;
+
+function renderDevices() {
+  const q = $('#devSearch').value.toLowerCase(), st = $('#devStatus').value, retired = $('#showRetired').checked;
+  const rows = state.devices
+    .filter(d => retired ? true : d.status !== 'retired')
+    .filter(d => !st || d.status === st)
+    .filter(d => !q || [d.name, d.model, d.os, d.serial, d.holderId && workerName(d.holderId)]
+      .some(v => v && v.toLowerCase().includes(q)))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(d => {
+      const holder = d.holderId
+        ? `<span class="chip">${esc(initials(workerName(d.holderId)))}</span>${esc(workerName(d.holderId))}` +
+          (d.status === 'lost' ? ' <span class="muted">(last holder)</span>' : '')
+        : '';
+      const btns = {
+        available:   `<button class="primary" data-a="checkout">Check out</button><button class="ghost danger" data-a="lost">Lost</button><button class="ghost" data-a="retire">Retire</button>`,
+        checked_out: `<button class="primary" data-a="checkin">Check in</button><button class="ghost danger" data-a="lost">Lost</button>`,
+        lost:        `<button class="primary" data-a="found">Found</button><button class="ghost" data-a="retire">Retire</button>`,
+        retired:     ``,
+      }[d.status] + `<button class="ghost" data-a="edit">Edit</button>`;
+      return `<tr data-id="${d.id}"><td><b>${esc(d.name)}</b></td><td>${esc(d.model)}</td><td>${esc(d.os)}</td>
+        <td class="muted">${esc(d.serial)}</td><td><span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span></td>
+        <td>${holder}</td><td class="muted num">${fmt(d.heldSince)}</td><td class="actions">${btns}</td></tr>`;
+    });
+  $('#devTable tbody').innerHTML = rows.join('') ||
+    emptyRow(8, state.devices.length ? 'No devices match the current filters' : 'No devices yet — add the pool with “Add device”');
+}
+
+function renderHistory() {
+  const q = $('#histSearch').value.toLowerCase(), dId = $('#histDevice').value, wId = $('#histWorker').value;
+  const devName = id => state.devices.find(d => d.id === id)?.name ?? '';
+  const rows = [...state.events].reverse()
+    .filter(e => (!dId || e.deviceId === dId) && (!wId || e.workerId === wId))
+    .filter(e => !q || [devName(e.deviceId), e.workerId && workerName(e.workerId), e.note, e.by]
+      .some(v => v && v.toLowerCase().includes(q)))
+    .map(e => `<tr><td class="muted num">${fmt(e.ts)}</td><td>${EVENT_LABEL[e.type] ?? esc(e.type)}</td>
+      <td>${esc(devName(e.deviceId))}</td><td>${e.workerId ? esc(workerName(e.workerId)) : ''}</td>
+      <td class="muted">${esc(e.by)}</td><td>${esc(e.note ?? '')}</td></tr>`);
+  $('#histTable tbody').innerHTML = rows.join('') || emptyRow(6, 'No events yet');
+  // filter dropdowns
+  const opts = (list, sel, label) => `<option value="">${label}</option>` +
+    list.map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
+  $('#histDevice').innerHTML = opts([...state.devices].sort((a, b) => a.name.localeCompare(b.name)), dId, 'All devices');
+  $('#histWorker').innerHTML = opts([...state.workers].sort((a, b) => a.name.localeCompare(b.name)), wId, 'All workers');
+}
+
+function renderWorkers() {
+  const rows = [...state.workers].sort((a, b) => a.name.localeCompare(b.name)).map(w => {
+    const held = state.devices.filter(d => d.holderId === w.id && d.status === 'checked_out');
+    return `<tr><td><span class="chip">${esc(initials(w.name))}</span><b>${esc(w.name)}</b></td>
+      <td>${held.length ? held.map(d => esc(d.name)).join(', ') : '<span class="muted">—</span>'}</td></tr>`;
+  });
+  $('#workerTable tbody').innerHTML = rows.join('') || emptyRow(2, 'No workers yet — add teammates so devices can be checked out');
+}
+
+function renderAll() { renderDevices(); renderHistory(); renderWorkers(); }
+
+// ---------- UI wiring ----------
+function show(tab) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  ['devices', 'history', 'workers', 'settings'].forEach(t => $('#tab-' + t).hidden = t !== tab);
+}
+$('#tabs').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b?.dataset.tab) show(b.dataset.tab);
+});
+['devSearch', 'devStatus', 'showRetired'].forEach(id => $('#' + id).addEventListener('input', renderDevices));
+['histSearch', 'histDevice', 'histWorker'].forEach(id => $('#' + id).addEventListener('input', renderHistory));
+$('#refreshBtn').onclick = () => act(loadData);
+window.addEventListener('focus', () => {
+  if (state && !document.querySelector('dialog[open]')) act(loadData);
+});
+
+function openForm(dialog, onOk) {
+  const form = dialog.querySelector('form');
+  form.reset();
+  dialog.returnValue = '';
+  dialog.showModal();
+  dialog.onclose = () => {
+    if (dialog.returnValue !== 'ok') return;
+    onOk(Object.fromEntries(new FormData(form)));
+  };
+}
+
+$('#addDeviceBtn').onclick = () => {
+  $('#deviceDialogTitle').textContent = 'Add device';
+  openForm($('#deviceDialog'), f => act(() => commit(`add device ${f.name}`, s => mutations.addDevice(s, f))));
+};
+$('#addWorkerBtn').onclick = () =>
+  openForm($('#workerDialog'), f => act(() => commit(`add worker ${f.name}`, s => mutations.addWorker(s, f.name))));
+
+$('#devTable').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  const a = btn?.dataset.a;
+  if (!a) return;
+  const id = btn.closest('tr').dataset.id;
+  const d = state.devices.find(d => d.id === id);
+  if (a === 'edit') {
+    $('#deviceDialogTitle').textContent = 'Edit ' + d.name;
+    const dlg = $('#deviceDialog');
+    openForm(dlg, f => act(() => commit(`edit device ${f.name}`, s => mutations.editDevice(s, id, f))));
+    for (const k of ['name', 'model', 'os', 'serial']) dlg.querySelector(`[name=${k}]`).value = d[k];
+  } else if (a === 'checkout') {
+    if (!state.workers.length) return toast('Add a worker first (Workers tab)');
+    $('#checkoutTitle').textContent = 'Check out ' + d.name;
+    $('#checkoutWorker').innerHTML = [...state.workers].sort((a, b) => a.name.localeCompare(b.name))
+      .map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('');
+    openForm($('#checkoutDialog'), f =>
+      act(() => commit(`checkout ${d.name} → ${workerName(f.workerId)}`, s => mutations.checkout(s, id, f.workerId, f.note))));
+  } else {
+    const cfg = {
+      checkin: ['Check in ' + d.name, 'checkin'],
+      lost:    ['Mark ' + d.name + ' LOST', 'markLost'],
+      found:   ['Mark ' + d.name + ' found', 'markFound'],
+      retire:  ['Retire ' + d.name + ' (permanent)', 'retire'],
+    }[a];
+    $('#actionTitle').textContent = cfg[0];
+    openForm($('#actionDialog'), f =>
+      act(() => commit(`${a} ${d.name}`, s => mutations[cfg[1]](s, id, f.note))));
+  }
+});
+
+// ---------- token gate ----------
+async function connect(tok) {
+  const res = await fetch('https://api.github.com/user', {
+    headers: { Authorization: `Bearer ${tok}`, Accept: 'application/vnd.github+json' } });
+  if (!res.ok) throw Error('GitHub rejected that token.');
+  login = (await res.json()).login;
+  localStorage.setItem('dt_token', tok);
+  await loadData(); // throws if token can't reach the repo
+  $('#gate').hidden = true; $('#tabs').hidden = false;
+  $('#who').hidden = false;
+  $('#who').textContent = login; $('#whoSettings').textContent = login;
+  show('devices');
+}
+$('#connectBtn').onclick = () => {
+  $('#gateErr').textContent = '';
+  connect($('#tokenInput').value.trim()).catch(e => $('#gateErr').textContent = e.message);
+};
+$('#disconnectBtn').onclick = () => { localStorage.removeItem('dt_token'); location.reload(); };
+if (token()) connect(token()).catch(e => { $('#gateErr').textContent = e.message; });
+
+// ---------- self-test: open index.html#selftest, check console ----------
+if (location.hash === '#selftest') {
+  const assert = (cond, msg) => { if (!cond) throw Error('SELFTEST FAIL: ' + msg); };
+  const s = { workers: [], devices: [], events: [] };
+  login = 'tester';
+  mutations.addWorker(s, 'Dana');
+  mutations.addDevice(s, { name: 'Pixel', model: 'P7', os: '14', serial: 'X1' });
+  const d = s.devices[0], w = s.workers[0];
+  mutations.checkout(s, d.id, w.id, 'test');
+  assert(d.status === 'checked_out' && d.holderId === w.id && d.heldSince, 'checkout sets holder');
+  let threw = false; try { mutations.checkout(s, d.id, w.id); } catch { threw = true; }
+  assert(threw, 'double checkout rejected');
+  mutations.markLost(s, d.id, '');
+  assert(d.status === 'lost' && d.holderId === w.id, 'lost keeps holder');
+  mutations.markFound(s, d.id, '');
+  assert(d.status === 'available' && !d.holderId, 'found clears holder');
+  mutations.checkout(s, d.id, w.id); mutations.checkin(s, d.id, '');
+  assert(d.status === 'available' && !d.holderId, 'checkin frees device');
+  threw = false; try { mutations.checkout(s, d.id, 'w-nope'); } catch { threw = true; }
+  assert(threw, 'unknown worker rejected');
+  mutations.retire(s, d.id, 'broken');
+  assert(d.status === 'retired', 'retire works');
+  threw = false; try { mutations.checkout(s, d.id, w.id); } catch { threw = true; }
+  assert(threw, 'checkout of retired rejected');
+  assert(s.events.length === 8, 'every action logged, got ' + s.events.length);
+  console.log('SELFTEST PASS —', s.events.length, 'events');
+  document.title = 'SELFTEST PASS';
+}
+</script>
+</body>
+</html>
