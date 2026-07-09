@@ -424,9 +424,12 @@ const headers = () => ({ Authorization: `Bearer ${token()}`, Accept: 'applicatio
 
 async function loadData() {
   const res = await fetch(API, { headers: headers(), cache: 'no-store' });
-  if (!res.ok) throw Error(res.status === 401 || res.status === 403
-    ? 'Token rejected — check its permissions (Contents: read/write on CallHub).'
-    : `Failed to load data (HTTP ${res.status})`);
+  if (!res.ok) throw Error({
+    401: 'Token rejected — check its permissions (Contents: read/write on CallHub).',
+    403: 'Token rejected — check its permissions (Contents: read/write on CallHub).',
+    // GitHub answers 404 when a token cannot see a private repo (e.g. fine-grained PAT pending org approval)
+    404: 'Token can’t access CallHub. If your fine-grained token shows “Pending” under github.com/settings/personal-access-tokens, use a classic token (scope: repo) instead — see the README.',
+  }[res.status] ?? `Failed to load data (HTTP ${res.status})`);
   const j = await res.json();
   sha = j.sha;
   state = JSON.parse(b64decode(j.content));
