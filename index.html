@@ -136,6 +136,7 @@
   tbody tr:hover { background: var(--surface-2); }
   tr:last-child td { border-bottom: 0; }
   td.num { font-variant-numeric: tabular-nums; }
+  td .sub { display: block; font-size: 11px; color: var(--muted); }
   td.actions { text-align: right; }
   td.actions button { margin-left: 6px; font-size: 12.5px; min-height: 32px; padding: 4px 11px; }
 
@@ -245,7 +246,7 @@
   <section id="tab-devices" hidden>
     <div class="bar">
       <span class="searchwrap"><svg class="i"><use href="#i-search"/></svg>
-        <input type="search" id="devSearch" placeholder="Search name, model, OS, serial, holder…" aria-label="Search devices"></span>
+        <input type="search" id="devSearch" placeholder="Search name, model, OS, serial, IMEI, phone, holder…" aria-label="Search devices"></span>
       <select id="devStatus" aria-label="Filter by status">
         <option value="">All statuses</option>
         <option value="available">Available</option>
@@ -258,7 +259,7 @@
       <button class="primary" id="addDeviceBtn"><svg class="i"><use href="#i-plus"/></svg>Add device</button>
     </div>
     <div class="tablewrap"><table id="devTable">
-      <thead><tr><th>Device</th><th>Model</th><th>OS</th><th>Serial / IMEI</th><th>Status</th><th>Holder</th><th>Since</th><th></th></tr></thead>
+      <thead><tr><th>Device</th><th>Model</th><th>OS</th><th>Serial / IMEIs</th><th>Phone</th><th>Status</th><th>Holder</th><th>Since</th><th></th></tr></thead>
       <tbody></tbody>
     </table></div>
   </section>
@@ -302,7 +303,10 @@
   <label>Name <input name="name" required placeholder="Pixel 7 #1"></label>
   <label>Model <input name="model" required placeholder="Google Pixel 7"></label>
   <label>OS version <input name="os" required placeholder="Android 14"></label>
-  <label>Serial / IMEI <input name="serial" required></label>
+  <label>Serial <input name="serial" required></label>
+  <label>IMEI 1 (optional) <input name="imei1"></label>
+  <label>IMEI 2 (optional) <input name="imei2"></label>
+  <label>Phone (optional) <input name="phone" type="tel" placeholder="050-1234567"></label>
   <div class="row"><button class="ghost" value="cancel" formnovalidate>Cancel</button>
   <button class="primary" value="ok">Save</button></div>
 </form></dialog>
@@ -363,13 +367,15 @@ const dev = (s, id) => { const d = s.devices.find(d => d.id === id); if (!d) thr
 const mutations = {
   addDevice(s, f) {
     const d = { id: uid('d'), name: f.name, model: f.model, os: f.os, serial: f.serial,
+                imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '',
                 status: 'available', holderId: null, heldSince: null };
     s.devices.push(d);
     ev(s, 'device-added', { deviceId: d.id, note: `${f.name} (${f.model})` });
   },
   editDevice(s, id, f) {
     const d = dev(s, id);
-    Object.assign(d, { name: f.name, model: f.model, os: f.os, serial: f.serial });
+    Object.assign(d, { name: f.name, model: f.model, os: f.os, serial: f.serial,
+                       imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '' });
     ev(s, 'device-edited', { deviceId: id });
   },
   addWorker(s, name) {
@@ -484,7 +490,7 @@ function renderDevices() {
   const rows = state.devices
     .filter(d => retired ? true : d.status !== 'retired')
     .filter(d => !st || d.status === st)
-    .filter(d => !q || [d.name, d.model, d.os, d.serial, d.holderId && workerName(d.holderId)]
+    .filter(d => !q || [d.name, d.model, d.os, d.serial, d.imei1, d.imei2, d.phone, d.holderId && workerName(d.holderId)]
       .some(v => v && v.toLowerCase().includes(q)))
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(d => {
@@ -499,11 +505,13 @@ function renderDevices() {
         retired:     ``,
       }[d.status] + `<button class="ghost" data-a="edit">Edit</button>`;
       return `<tr data-id="${d.id}"><td><b>${esc(d.name)}</b></td><td>${esc(d.model)}</td><td>${esc(d.os)}</td>
-        <td class="muted">${esc(d.serial)}</td><td><span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span></td>
+        <td class="muted">${esc(d.serial)}${d.imei1 ? `<span class="sub">IMEI ${esc(d.imei1)}</span>` : ''}${d.imei2 ? `<span class="sub">IMEI2 ${esc(d.imei2)}</span>` : ''}</td>
+        <td class="num">${d.phone ? esc(d.phone) : '<span class="muted">—</span>'}</td>
+        <td><span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span></td>
         <td>${holder}</td><td class="muted num">${fmt(d.heldSince)}</td><td class="actions">${btns}</td></tr>`;
     });
   $('#devTable tbody').innerHTML = rows.join('') ||
-    emptyRow(8, state.devices.length ? 'No devices match the current filters' : 'No devices yet — add the pool with “Add device”');
+    emptyRow(9, state.devices.length ? 'No devices match the current filters' : 'No devices yet — add the pool with “Add device”');
 }
 
 function renderHistory() {
@@ -579,7 +587,7 @@ $('#devTable').addEventListener('click', e => {
     $('#deviceDialogTitle').textContent = 'Edit ' + d.name;
     const dlg = $('#deviceDialog');
     openForm(dlg, f => act(() => commit(`edit device ${f.name}`, s => mutations.editDevice(s, id, f))));
-    for (const k of ['name', 'model', 'os', 'serial']) dlg.querySelector(`[name=${k}]`).value = d[k];
+    for (const k of ['name', 'model', 'os', 'serial', 'imei1', 'imei2', 'phone']) dlg.querySelector(`[name=${k}]`).value = d[k] ?? '';
   } else if (a === 'checkout') {
     if (!state.workers.length) return toast('Add a worker first (Workers tab)');
     $('#checkoutTitle').textContent = 'Check out ' + d.name;
@@ -626,8 +634,11 @@ if (location.hash === '#selftest') {
   const s = { workers: [], devices: [], events: [] };
   login = 'tester';
   mutations.addWorker(s, 'Dana');
-  mutations.addDevice(s, { name: 'Pixel', model: 'P7', os: '14', serial: 'X1' });
+  mutations.addDevice(s, { name: 'Pixel', model: 'P7', os: '14', serial: 'X1', imei1: '111', imei2: '222', phone: '050' });
   const d = s.devices[0], w = s.workers[0];
+  assert(d.imei1 === '111' && d.imei2 === '222' && d.phone === '050', 'identifier fields stored');
+  mutations.editDevice(s, d.id, { name: 'Pixel', model: 'P7', os: '14', serial: 'X1' });
+  assert(d.imei1 === '' && d.phone === '', 'edit without identifiers clears them');
   mutations.checkout(s, d.id, w.id, 'test');
   assert(d.status === 'checked_out' && d.holderId === w.id && d.heldSince, 'checkout sets holder');
   let threw = false; try { mutations.checkout(s, d.id, w.id); } catch { threw = true; }
@@ -644,7 +655,7 @@ if (location.hash === '#selftest') {
   assert(d.status === 'retired', 'retire works');
   threw = false; try { mutations.checkout(s, d.id, w.id); } catch { threw = true; }
   assert(threw, 'checkout of retired rejected');
-  assert(s.events.length === 8, 'every action logged, got ' + s.events.length);
+  assert(s.events.length === 9, 'every action logged, got ' + s.events.length);
   console.log('SELFTEST PASS —', s.events.length, 'events');
   document.title = 'SELFTEST PASS';
 }
