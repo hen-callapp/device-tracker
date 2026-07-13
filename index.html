@@ -181,6 +181,7 @@
              color: var(--muted); min-width: 44px; }
   .diff del { color: var(--muted); }
   .diff ins { text-decoration: none; font-weight: 500; }
+  .diff .to { white-space: nowrap; } /* arrow stays glued to the new value on wrap */
   .diff .arr { color: var(--muted); }
 
   .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
@@ -611,7 +612,7 @@ const FIELD_LABEL = { name: 'Name', os: 'OS', serial: 'Serial', imei1: 'IMEI 1',
                       phone: 'Phone', provider: 'SIM' };
 const diffSide = (v, tag) => v ? `<${tag}>${esc(v)}</${tag}>` : '<span class="muted">—</span>';
 const diffHtml = changes => changes.map(c =>
-  `<span class="diff"><span class="f">${FIELD_LABEL[c.field] ?? esc(c.field)}</span>${diffSide(c.from, 'del')}<span class="arr" aria-hidden="true">→</span>${diffSide(c.to, 'ins')}</span>`).join('');
+  `<span class="diff"><span class="f">${FIELD_LABEL[c.field] ?? esc(c.field)}</span>${diffSide(c.from, 'del')}<span class="to"><span class="arr" aria-hidden="true">→</span> ${diffSide(c.to, 'ins')}</span></span>`).join('');
 
 function toast(msg) {
   const t = $('#toast');
