@@ -159,6 +159,17 @@
   td .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
   td.actions { text-align: right; white-space: nowrap; }
   td.actions button { margin-left: 6px; font-size: 13px; min-height: 36px; padding: 5px 11px; }
+  td.actions button.menu-btn { padding: 5px 8px; }
+
+  /* row action menu — popover renders in the top layer, escaping .tablewrap's overflow:hidden */
+  #rowMenu { position: fixed; inset: auto; margin: 0; min-width: 150px; padding: 5px;
+             border: 1px solid var(--border); border-radius: 10px;
+             background: var(--surface); color: var(--fg); box-shadow: var(--shadow-lg); }
+  #rowMenu button { display: flex; width: 100%; align-items: center; gap: 8px; border: 0;
+                    background: none; font: inherit; font-size: 13px; color: var(--fg);
+                    padding: 8px 10px; border-radius: 6px; cursor: pointer; text-align: left; }
+  #rowMenu button:hover, #rowMenu button:focus-visible { background: var(--surface-2); }
+  #rowMenu button.danger { color: var(--danger); }
   td.h-when { white-space: nowrap; }
 
   .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
@@ -245,6 +256,7 @@
     #devTable td.actions { grid-column: 1 / -1; grid-row: 3; display: flex; flex-wrap: wrap;
                            gap: 8px; margin-top: 8px; white-space: normal; }
     #devTable td.actions button { margin: 0; flex: 1; min-width: 96px; min-height: 40px; white-space: nowrap; }
+    #devTable td.actions button.menu-btn { flex: 0 0 48px; min-width: 0; }
     #devTable td.empty { grid-column: 1 / -1; }
   }
   /* ---- history: stacked rows on small screens ---- */
@@ -287,6 +299,7 @@
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
 </svg>
 
 <header>
@@ -337,7 +350,7 @@
       <div class="chips" id="statusChips" role="group" aria-label="Filter by status">
         <button class="fbtn" data-st="" aria-pressed="true">All <span class="cnt"></span></button>
         <button class="fbtn" data-st="available" aria-pressed="false">Available <span class="cnt"></span></button>
-        <button class="fbtn" data-st="checked_out" aria-pressed="false">Checked out <span class="cnt"></span></button>
+        <button class="fbtn" data-st="checked_out" aria-pressed="false">In use <span class="cnt"></span></button>
         <button class="fbtn" data-st="lost" aria-pressed="false">Lost <span class="cnt"></span></button>
         <button class="fbtn" data-st="retired" aria-pressed="false" hidden>Retired <span class="cnt"></span></button>
       </div>
@@ -397,13 +410,13 @@
   <button class="primary" value="ok">Save</button></div>
 </form></dialog>
 
-<!-- checkout -->
+<!-- assign (data keys keep the legacy checkout naming) -->
 <dialog id="checkoutDialog" aria-labelledby="checkoutTitle"><form method="dialog" id="checkoutForm">
-  <h2 id="checkoutTitle">Check out</h2>
+  <h2 id="checkoutTitle">Assign</h2>
   <label>Worker <select name="workerId" required id="checkoutWorker"></select></label>
   <label>Note (optional) <input name="note" placeholder="e.g. 5.12 regression run"></label>
   <div class="row"><button class="ghost" value="cancel" formnovalidate>Cancel</button>
-  <button class="primary" value="ok">Check out</button></div>
+  <button class="primary" value="ok">Assign</button></div>
 </form></dialog>
 
 <!-- generic action (check-in / lost / found / retire) -->
@@ -421,6 +434,8 @@
   <div class="row"><button class="ghost" value="cancel" formnovalidate>Cancel</button>
   <button class="primary" value="ok">Add</button></div>
 </form></dialog>
+
+<div id="rowMenu" popover role="menu" aria-label="Device actions"></div>
 
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -470,14 +485,14 @@ const mutations = {
   },
   checkout(s, deviceId, workerId, note) {
     const d = dev(s, deviceId);
-    if (d.status !== 'available') throw Error(`cannot check out a ${d.status} device`);
+    if (d.status !== 'available') throw Error(`cannot assign a ${d.status} device`);
     if (!s.workers.some(w => w.id === workerId)) throw Error('worker not found');
     d.status = 'checked_out'; d.holderId = workerId; d.heldSince = now();
     ev(s, 'checkout', { deviceId, workerId, note });
   },
   checkin(s, deviceId, note) {
     const d = dev(s, deviceId);
-    if (d.status !== 'checked_out') throw Error('device is not checked out');
+    if (d.status !== 'checked_out') throw Error('device is not in use');
     ev(s, 'checkin', { deviceId, workerId: d.holderId, note });
     d.status = 'available'; d.holderId = null; d.heldSince = null;
   },
@@ -496,7 +511,7 @@ const mutations = {
   },
   retire(s, deviceId, note) {
     const d = dev(s, deviceId);
-    if (d.status === 'checked_out') throw Error('check the device in first');
+    if (d.status === 'checked_out') throw Error('return the device first');
     if (d.status === 'retired') throw Error('already retired');
     d.status = 'retired'; d.holderId = null; d.heldSince = null;
     ev(s, 'retired', { deviceId, note });
@@ -565,14 +580,14 @@ const rel = ts => {
   if (h < 48) return h + ' h ago';
   return Math.round(h / 24) + ' days ago';
 };
-const STATUS_LABEL = { available: 'Available', checked_out: 'Checked out', lost: 'Lost', retired: 'Retired' };
+const STATUS_LABEL = { available: 'Available', checked_out: 'In use', lost: 'Lost', retired: 'Retired' };
 const PROVIDERS = ['Pelephone', 'Cellcom', 'Partner', 'HOT Mobile', '012 Mobile', '019 Mobile',
                    'Golan Telecom', 'We4G', 'Rami Levy'];
 const provSlug = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 $('#providerSelect').innerHTML = '<option value="">—</option>' +
   PROVIDERS.map(p => `<option>${p}</option>`).join('');
-const EVENT_LABEL = { 'device-added': 'Device added', 'device-edited': 'Device edited', checkout: 'Checkout',
-                      checkin: 'Check-in', lost: 'Marked lost', found: 'Marked found', retired: 'Retired',
+const EVENT_LABEL = { 'device-added': 'Device added', 'device-edited': 'Device edited', checkout: 'Assigned',
+                      checkin: 'Returned', lost: 'Marked lost', found: 'Marked found', retired: 'Retired',
                       'worker-added': 'Worker added' };
 
 function toast(msg) {
@@ -597,6 +612,7 @@ const devCompare = (a, b) => {
 };
 
 function renderDevices() {
+  if (rowMenu.matches(':popover-open')) rowMenu.hidePopover(); // rows are about to be replaced
   const q = $('#devSearch').value.toLowerCase(), showRetired = $('#showRetired').checked;
   if (!showRetired && statusFilter === 'retired') statusFilter = '';
   const counts = { '': 0, available: 0, checked_out: 0, lost: 0, retired: 0 };
@@ -621,11 +637,12 @@ function renderDevices() {
           (d.status === 'lost' ? ' <span class="muted">(last holder)</span>' : '')
         : '<span class="muted">—</span>';
       const btns = {
-        available:   `<button class="primary" data-a="checkout">Check out</button><button class="ghost danger" data-a="lost">Lost</button><button class="ghost" data-a="retire">Retire</button>`,
-        checked_out: `<button class="primary" data-a="checkin">Check in</button><button class="ghost danger" data-a="lost">Lost</button>`,
-        lost:        `<button class="primary" data-a="found">Found</button><button class="ghost" data-a="retire">Retire</button>`,
+        available:   `<button class="primary" data-a="checkout">Assign</button>`,
+        checked_out: `<button class="primary" data-a="checkin">Return</button>`,
+        lost:        `<button class="primary" data-a="found">Found</button>`,
         retired:     ``,
-      }[d.status] + `<button class="ghost" data-a="edit">Edit</button>`;
+      }[d.status] + `<button class="ghost menu-btn" data-menu aria-haspopup="menu" aria-expanded="false"
+        aria-label="More actions for ${esc(d.name)}"><svg class="i" aria-hidden="true"><use href="#i-dots"/></svg></button>`;
       return `<tr data-id="${d.id}">
         <td class="c-dev"><b>${esc(d.name)}</b><span class="sub">${esc(d.os)}</span></td>
         <td class="c-ids muted">${esc(d.serial)}${d.imei1 ? `<span class="sub">IMEI ${esc(d.imei1)}</span>` : ''}${d.imei2 ? `<span class="sub">IMEI2 ${esc(d.imei2)}</span>` : ''}${d.phone ? `<span class="sub"><button class="copy" data-copy="${esc(d.phone)}" title="Copy phone number" aria-label="Copy phone number ${esc(d.phone)}">${esc(d.phone)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button></span>` : ''}${d.provider ? `<span class="prov prov-${provSlug(d.provider)}">${esc(d.provider)}</span>` : ''}</td>
@@ -661,7 +678,7 @@ function renderWorkers() {
     return `<tr><td><span class="chip" aria-hidden="true">${esc(initials(w.name))}</span><b>${esc(w.name)}</b></td>
       <td>${held.length ? held.map(d => esc(d.name)).join(', ') : '<span class="muted">—</span>'}</td></tr>`;
   });
-  $('#workerTable tbody').innerHTML = rows.join('') || emptyRow(2, 'No workers yet — add teammates so devices can be checked out');
+  $('#workerTable tbody').innerHTML = rows.join('') || emptyRow(2, 'No workers yet — add teammates so devices can be assigned');
 }
 
 function renderAll() { renderDevices(); renderHistory(); renderWorkers(); }
@@ -717,16 +734,59 @@ $('#addDeviceBtn').onclick = () => {
 $('#addWorkerBtn').onclick = () =>
   openForm($('#workerDialog'), f => act(() => commit(`add worker ${f.name}`, s => mutations.addWorker(s, f.name))));
 
+// ---------- row action menu (one shared popover, filled per device status) ----------
+const rowMenu = $('#rowMenu');
+const MENU_ITEMS = {
+  available:   [['edit', 'Edit'], ['lost', 'Mark lost', 'danger'], ['retire', 'Retire']],
+  checked_out: [['edit', 'Edit'], ['lost', 'Mark lost', 'danger']],
+  lost:        [['edit', 'Edit'], ['retire', 'Retire']],
+  retired:     [['edit', 'Edit']],
+};
+function openRowMenu(btn, d) {
+  rowMenu.innerHTML = MENU_ITEMS[d.status].map(([a, label, cls]) =>
+    `<button role="menuitem" ${cls ? `class="${cls}"` : ''} data-a="${a}">${label}</button>`).join('');
+  rowMenu.dataset.id = d.id;
+  rowMenu.showPopover();
+  const r = btn.getBoundingClientRect(), m = rowMenu.getBoundingClientRect();
+  rowMenu.style.left = Math.max(8, r.right - m.width) + 'px';
+  rowMenu.style.top = (r.bottom + m.height + 8 > innerHeight ? r.top - m.height - 4 : r.bottom + 4) + 'px';
+  btn.setAttribute('aria-expanded', 'true');
+  rowMenu.querySelector('button').focus();
+}
+rowMenu.addEventListener('toggle', e => {
+  if (e.newState !== 'closed') return;
+  const btn = document.querySelector(`tr[data-id="${rowMenu.dataset.id}"] .menu-btn`);
+  btn?.setAttribute('aria-expanded', 'false');
+  // Esc / action click leaves focus stranded on <body>; a dialog opened by the action keeps it
+  if (document.activeElement === document.body || rowMenu.contains(document.activeElement)) btn?.focus();
+});
+rowMenu.addEventListener('keydown', e => {
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  const items = [...rowMenu.querySelectorAll('button')];
+  items[(items.indexOf(document.activeElement) + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+});
+rowMenu.addEventListener('click', e => {
+  const a = e.target.closest('button')?.dataset.a;
+  if (!a) return;
+  rowMenu.hidePopover();
+  deviceAction(a, rowMenu.dataset.id);
+});
+
 $('#devTable').addEventListener('click', e => {
   const btn = e.target.closest('button');
-  if (btn?.dataset.copy) {
+  if (!btn) return;
+  if (btn.dataset.copy) {
     navigator.clipboard.writeText(btn.dataset.copy)
       .then(() => toast('Copied ' + btn.dataset.copy), () => toast('⚠ Copy failed'));
     return;
   }
-  const a = btn?.dataset.a;
-  if (!a) return;
   const id = btn.closest('tr').dataset.id;
+  if ('menu' in btn.dataset) openRowMenu(btn, state.devices.find(d => d.id === id));
+  else if (btn.dataset.a) deviceAction(btn.dataset.a, id);
+});
+
+function deviceAction(a, id) {
   const d = state.devices.find(d => d.id === id);
   if (a === 'edit') {
     $('#deviceDialogTitle').textContent = 'Edit ' + d.name;
@@ -735,14 +795,14 @@ $('#devTable').addEventListener('click', e => {
     for (const k of ['name', 'os', 'serial', 'imei1', 'imei2', 'phone', 'provider']) dlg.querySelector(`[name=${k}]`).value = d[k] ?? '';
   } else if (a === 'checkout') {
     if (!state.workers.length) return toast('Add a worker first (Workers tab)');
-    $('#checkoutTitle').textContent = 'Check out ' + d.name;
+    $('#checkoutTitle').textContent = 'Assign ' + d.name;
     $('#checkoutWorker').innerHTML = [...state.workers].sort((a, b) => a.name.localeCompare(b.name))
       .map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('');
     openForm($('#checkoutDialog'), f =>
-      act(() => commit(`checkout ${d.name} → ${workerName(f.workerId)}`, s => mutations.checkout(s, id, f.workerId, f.note))));
+      act(() => commit(`assign ${d.name} → ${workerName(f.workerId)}`, s => mutations.checkout(s, id, f.workerId, f.note))));
   } else {
     const cfg = {
-      checkin: ['Check in ' + d.name, 'checkin'],
+      checkin: ['Return ' + d.name, 'checkin'],
       lost:    ['Mark ' + d.name + ' LOST', 'markLost'],
       found:   ['Mark ' + d.name + ' found', 'markFound'],
       retire:  ['Retire ' + d.name + ' (permanent)', 'retire'],
@@ -751,7 +811,7 @@ $('#devTable').addEventListener('click', e => {
     openForm($('#actionDialog'), f =>
       act(() => commit(`${a} ${d.name}`, s => mutations[cfg[1]](s, id, f.note))));
   }
-});
+}
 
 // ---------- token gate ----------
 function enterApp() {
