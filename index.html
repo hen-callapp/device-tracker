@@ -113,6 +113,7 @@
 
   /* ---- status filter chips ---- */
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips + .chips { border-left: 1px solid var(--border); padding-left: 10px; }
   .fbtn { display: inline-flex; align-items: center; gap: 7px; min-height: 36px;
           border: 1px solid var(--border); background: var(--surface); color: var(--muted);
           border-radius: 999px; padding: 5px 13px; font: inherit; font-size: 13px; cursor: pointer;
@@ -158,7 +159,8 @@
   td.num, .num { font-variant-numeric: tabular-nums; }
   td .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
   td.actions { text-align: right; white-space: nowrap; }
-  td.actions button { margin-left: 6px; font-size: 13px; min-height: 36px; padding: 5px 11px; }
+  td.actions button { margin-left: 6px; font-size: 13px; min-height: 36px; padding: 5px 11px;
+                      vertical-align: middle; /* icon-only kebab and text button share no text baseline */ }
   td.actions button.menu-btn { padding: 5px 8px; }
 
   /* row action menu — popover renders in the top layer, escaping .tablewrap's overflow:hidden */
@@ -292,7 +294,6 @@
   <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
@@ -343,7 +344,6 @@
       <span class="searchwrap"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
         <input type="search" id="devSearch" placeholder="Search name, OS, serial, IMEI, phone, holder…" aria-label="Search devices"></span>
       <span class="spacer"></span>
-      <button class="ghost" id="refreshBtn"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
       <button class="primary" id="addDeviceBtn"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add device</button>
     </div>
     <div class="bar">
@@ -353,6 +353,10 @@
         <button class="fbtn" data-st="checked_out" aria-pressed="false">In use <span class="cnt"></span></button>
         <button class="fbtn" data-st="lost" aria-pressed="false">Lost <span class="cnt"></span></button>
         <button class="fbtn" data-st="retired" aria-pressed="false" hidden>Retired <span class="cnt"></span></button>
+      </div>
+      <div class="chips" id="platChips" role="group" aria-label="Filter by platform">
+        <button class="fbtn" data-pl="android" aria-pressed="false">Android <span class="cnt"></span></button>
+        <button class="fbtn" data-pl="ios" aria-pressed="false">iOS <span class="cnt"></span></button>
       </div>
       <span class="spacer"></span>
       <label class="check"><input type="checkbox" id="showRetired"> show retired</label>
@@ -444,7 +448,7 @@
 const OWNER = 'CallApp-Software-Ltd', REPO = 'CallHub', DATA_PATH = 'apps/device-tracker/data.json';
 const API = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${DATA_PATH}`;
 
-let state = null, sha = null, login = null, statusFilter = '';
+let state = null, sha = null, login = null, statusFilter = '', platFilter = '';
 const $ = s => document.querySelector(s);
 const token = () => localStorage.getItem('dt_token');
 
@@ -599,17 +603,20 @@ function toast(msg) {
 const emptyRow = (cols, msg) =>
   `<tr><td colspan="${cols}" class="empty"><svg class="i" aria-hidden="true"><use href="#i-device"/></svg>${msg}</td></tr>`;
 
-let devSort = { k: 'name', dir: 1 };
-try { devSort = JSON.parse(localStorage.getItem('dt_sort')) || devSort; } catch {}
-const STATUS_ORDER = { available: 0, checked_out: 1, lost: 2, retired: 3 };
+let devSort = { k: 'status', dir: 1 }; // QA default: in use on top, lost at the bottom
+try { devSort = JSON.parse(localStorage.getItem('dt_sort2')) || devSort; } catch {}
+const STATUS_ORDER = { checked_out: 0, available: 1, lost: 2, retired: 3 };
 const sortVal = (d, k) => k === 'status' ? STATUS_ORDER[d.status]
   : k === 'holder' ? (d.holderId ? workerName(d.holderId).toLowerCase() : '')
   : (d[k] ?? '').toLowerCase();
+const cmp = (x, y) => x < y ? -1 : x > y ? 1 : 0;
 const devCompare = (a, b) => {
   const x = sortVal(a, devSort.k), y = sortVal(b, devSort.k);
   if ((x === '') !== (y === '')) return x === '' ? 1 : -1; // blanks last, regardless of direction
-  return (x < y ? -1 : x > y ? 1 : 0) * devSort.dir;
+  return cmp(x, y) * devSort.dir
+    || (devSort.k === 'status' ? cmp(sortVal(a, 'holder'), sortVal(b, 'holder')) : 0); // people A→Z within a group
 };
+const plat = d => /\b(ios|ipados|iphone|ipad)\b/i.test(d.name + ' ' + d.os) ? 'ios' : 'android';
 
 function renderDevices() {
   if (rowMenu.matches(':popover-open')) rowMenu.hidePopover(); // rows are about to be replaced
@@ -622,11 +629,17 @@ function renderDevices() {
     b.setAttribute('aria-pressed', String(b.dataset.st === statusFilter));
     b.querySelector('.cnt').textContent = counts[b.dataset.st];
   });
+  document.querySelectorAll('#platChips .fbtn').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.pl === platFilter));
+    b.querySelector('.cnt').textContent =
+      state.devices.filter(d => plat(d) === b.dataset.pl && (showRetired || d.status !== 'retired')).length;
+  });
   document.querySelectorAll('#devTable th[data-k]').forEach(th =>
     th.setAttribute('aria-sort', th.dataset.k === devSort.k ? (devSort.dir === 1 ? 'ascending' : 'descending') : 'none'));
   const rows = state.devices
     .filter(d => showRetired ? true : d.status !== 'retired')
     .filter(d => !statusFilter || d.status === statusFilter)
+    .filter(d => !platFilter || plat(d) === platFilter)
     .filter(d => !q || [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.provider, d.holderId && workerName(d.holderId)]
       .some(v => v && v.toLowerCase().includes(q)))
     .sort((a, b) => a.name.localeCompare(b.name)) // stable tiebreak for the column sort below
@@ -703,15 +716,20 @@ $('#statusChips').addEventListener('click', e => {
   statusFilter = b.dataset.st;
   renderDevices();
 });
+$('#platChips').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  platFilter = platFilter === b.dataset.pl ? '' : b.dataset.pl; // click again to clear
+  renderDevices();
+});
 $('#devTable thead').addEventListener('click', e => {
   const k = e.target.closest('th')?.dataset.k;
   if (!k) return;
   devSort = { k, dir: devSort.k === k ? -devSort.dir : 1 };
-  localStorage.setItem('dt_sort', JSON.stringify(devSort));
+  localStorage.setItem('dt_sort2', JSON.stringify(devSort));
   renderDevices();
 });
 ['histSearch', 'histDevice', 'histWorker'].forEach(id => $('#' + id).addEventListener('input', renderHistory));
-$('#refreshBtn').onclick = () => act(loadData);
 window.addEventListener('focus', () => {
   if (state && !document.querySelector('dialog[open]')) act(loadData);
 });
@@ -891,6 +909,10 @@ if (location.hash === '#selftest') {
   const savedSort = devSort;
   devSort = { k: 'name', dir: -1 };
   assert(devCompare({ name: '' }, { name: 'A' }) === 1 && devCompare({ name: 'A' }, { name: '' }) === -1, 'blanks sort last both directions');
+  devSort = { k: 'status', dir: 1 };
+  assert(devCompare({ status: 'checked_out', holderId: null }, { status: 'available', holderId: null }) < 0
+      && devCompare({ status: 'available', holderId: null }, { status: 'lost', holderId: null }) < 0, 'default order: in use → available → lost');
+  assert(plat({ name: 'iPhone 15', os: 'iOS 18' }) === 'ios' && plat({ name: 'Pixel 7', os: 'Android 14' }) === 'android', 'platform detection');
   devSort = savedSort;
   console.log('SELFTEST PASS —', s.events.length, 'events');
   document.title = 'SELFTEST PASS';
