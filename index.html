@@ -139,6 +139,10 @@
   td .sub { display: block; font-size: 11px; color: var(--muted); }
   td.actions { text-align: right; }
   td.actions button { margin-left: 6px; font-size: 12.5px; min-height: 32px; padding: 4px 11px; }
+  th[data-k] { cursor: pointer; user-select: none; }
+  th[data-k]:hover { color: var(--fg); }
+  th[aria-sort="ascending"]::after { content: " ▲"; font-size: 9px; }
+  th[aria-sort="descending"]::after { content: " ▼"; font-size: 9px; }
 
   .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
            border-radius: 999px; font-size: 12px; font-weight: 600; }
@@ -259,7 +263,7 @@
       <button class="primary" id="addDeviceBtn"><svg class="i"><use href="#i-plus"/></svg>Add device</button>
     </div>
     <div class="tablewrap"><table id="devTable">
-      <thead><tr><th>Device</th><th>OS</th><th>Serial / IMEIs</th><th>Phone</th><th>Status</th><th>Holder</th><th>Since</th><th></th></tr></thead>
+      <thead><tr><th data-k="name">Device</th><th data-k="os">OS</th><th data-k="serial">Serial / IMEIs</th><th data-k="phone">Phone</th><th data-k="status">Status</th><th data-k="holder">Holder</th><th data-k="heldSince">Since</th><th></th></tr></thead>
       <tbody></tbody>
     </table></div>
   </section>
@@ -484,14 +488,24 @@ function toast(msg) {
 const emptyRow = (cols, msg) =>
   `<tr><td colspan="${cols}" class="empty"><svg class="i"><use href="#i-device"/></svg>${msg}</td></tr>`;
 
+let devSort = { k: 'name', dir: 1 };
+try { devSort = JSON.parse(localStorage.getItem('dt_sort')) || devSort; } catch {}
+const STATUS_ORDER = { available: 0, checked_out: 1, lost: 2, retired: 3 };
+const sortVal = (d, k) => k === 'status' ? STATUS_ORDER[d.status]
+  : k === 'holder' ? (d.holderId ? workerName(d.holderId).toLowerCase() : '')
+  : (d[k] ?? '').toLowerCase();
+
 function renderDevices() {
   const q = $('#devSearch').value.toLowerCase(), st = $('#devStatus').value, retired = $('#showRetired').checked;
+  document.querySelectorAll('#devTable th[data-k]').forEach(th =>
+    th.setAttribute('aria-sort', th.dataset.k === devSort.k ? (devSort.dir === 1 ? 'ascending' : 'descending') : 'none'));
   const rows = state.devices
     .filter(d => retired ? true : d.status !== 'retired')
     .filter(d => !st || d.status === st)
     .filter(d => !q || [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.holderId && workerName(d.holderId)]
       .some(v => v && v.toLowerCase().includes(q)))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => a.name.localeCompare(b.name)) // stable tiebreak for the column sort below
+    .sort((a, b) => { const x = sortVal(a, devSort.k), y = sortVal(b, devSort.k); return (x < y ? -1 : x > y ? 1 : 0) * devSort.dir; })
     .map(d => {
       const holder = d.holderId
         ? `<span class="chip">${esc(initials(workerName(d.holderId)))}</span>${esc(workerName(d.holderId))}` +
@@ -552,6 +566,13 @@ $('#tabs').addEventListener('click', e => {
   if (b?.dataset.tab) show(b.dataset.tab);
 });
 ['devSearch', 'devStatus', 'showRetired'].forEach(id => $('#' + id).addEventListener('input', renderDevices));
+$('#devTable thead').addEventListener('click', e => {
+  const k = e.target.closest('th')?.dataset.k;
+  if (!k) return;
+  devSort = { k, dir: devSort.k === k ? -devSort.dir : 1 };
+  localStorage.setItem('dt_sort', JSON.stringify(devSort));
+  renderDevices();
+});
 ['histSearch', 'histDevice', 'histWorker'].forEach(id => $('#' + id).addEventListener('input', renderHistory));
 $('#refreshBtn').onclick = () => act(loadData);
 window.addEventListener('focus', () => {
@@ -655,6 +676,8 @@ if (location.hash === '#selftest') {
   threw = false; try { mutations.checkout(s, d.id, w.id); } catch { threw = true; }
   assert(threw, 'checkout of retired rejected');
   assert(s.events.length === 9, 'every action logged, got ' + s.events.length);
+  assert(sortVal({ status: 'lost' }, 'status') === 2 && sortVal({ holderId: null }, 'holder') === '', 'sort special keys');
+  assert(sortVal({ name: 'Zebra' }, 'name') === 'zebra' && sortVal({ heldSince: null }, 'heldSince') === '', 'sort field keys');
   console.log('SELFTEST PASS —', s.events.length, 'events');
   document.title = 'SELFTEST PASS';
 }
