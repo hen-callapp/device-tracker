@@ -174,6 +174,15 @@
   #rowMenu button.danger { color: var(--danger); }
   td.h-when { white-space: nowrap; }
 
+  /* edit diff: one line per changed field — WHAT · old → new */
+  .diff { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 6px; font-size: 12px; }
+  .diff + .diff { margin-top: 3px; }
+  .diff .f { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+             color: var(--muted); min-width: 44px; }
+  .diff del { color: var(--muted); }
+  .diff ins { text-decoration: none; font-weight: 500; }
+  .diff .arr { color: var(--muted); }
+
   .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
            border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
   .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
@@ -263,6 +272,7 @@
   }
   /* ---- history: stacked rows on small screens ---- */
   @media (max-width: 720px) {
+    #tab-history .bar select { flex: 1 1 130px; min-width: 0; } /* filters share a row, never overflow */
     #histTable thead { display: none; }
     #histTable tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px;
                     padding: 10px 14px; border-bottom: 1px solid var(--border); }
@@ -376,7 +386,7 @@
       <select id="histWorker" aria-label="Filter by worker"><option value="">All workers</option></select>
     </div>
     <div class="tablewrap"><table id="histTable">
-      <thead><tr><th>When</th><th>Action</th><th>Device</th><th>Worker</th><th>By</th><th>Note</th></tr></thead>
+      <thead><tr><th>When</th><th>Action</th><th>Device</th><th>Worker</th><th>By</th><th>Details</th></tr></thead>
       <tbody></tbody>
     </table></div>
   </section>
@@ -479,9 +489,13 @@ const mutations = {
   },
   editDevice(s, id, f) {
     const d = dev(s, id);
-    Object.assign(d, { name: f.name, os: f.os, serial: f.serial,
-                       imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '', provider: f.provider || '' });
-    ev(s, 'device-edited', { deviceId: id });
+    const next = { name: f.name, os: f.os, serial: f.serial,
+                   imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '', provider: f.provider || '' };
+    const changes = Object.keys(next).filter(k => (d[k] ?? '') !== next[k])
+      .map(k => ({ field: k, from: d[k] ?? '', to: next[k] }));
+    if (!changes.length) throw Error('no changes to save');
+    Object.assign(d, next);
+    ev(s, 'device-edited', { deviceId: id, changes });
   },
   addWorker(s, name) {
     s.workers.push({ id: uid('w'), name });
@@ -593,6 +607,11 @@ $('#providerSelect').innerHTML = '<option value="">—</option>' +
 const EVENT_LABEL = { 'device-added': 'Device added', 'device-edited': 'Device edited', checkout: 'Assigned',
                       checkin: 'Returned', lost: 'Marked lost', found: 'Marked found', retired: 'Retired',
                       'worker-added': 'Worker added' };
+const FIELD_LABEL = { name: 'Name', os: 'OS', serial: 'Serial', imei1: 'IMEI 1', imei2: 'IMEI 2',
+                      phone: 'Phone', provider: 'SIM' };
+const diffSide = (v, tag) => v ? `<${tag}>${esc(v)}</${tag}>` : '<span class="muted">—</span>';
+const diffHtml = changes => changes.map(c =>
+  `<span class="diff"><span class="f">${FIELD_LABEL[c.field] ?? esc(c.field)}</span>${diffSide(c.from, 'del')}<span class="arr" aria-hidden="true">→</span>${diffSide(c.to, 'ins')}</span>`).join('');
 
 function toast(msg) {
   const t = $('#toast');
@@ -610,7 +629,9 @@ const sortVal = (d, k) => k === 'status' ? STATUS_ORDER[d.status]
   : k === 'holder' ? (d.holderId ? workerName(d.holderId).toLowerCase() : '')
   : (d[k] ?? '').toLowerCase();
 const cmp = (x, y) => x < y ? -1 : x > y ? 1 : 0;
+const sink = d => d.status === 'lost' || d.status === 'retired' ? 1 : 0;
 const devCompare = (a, b) => {
+  if (sink(a) !== sink(b)) return sink(a) - sink(b); // lost/retired always at the bottom
   const x = sortVal(a, devSort.k), y = sortVal(b, devSort.k);
   if ((x === '') !== (y === '')) return x === '' ? 1 : -1; // blanks last, regardless of direction
   return cmp(x, y) * devSort.dir
@@ -672,11 +693,12 @@ function renderHistory() {
   const devName = id => state.devices.find(d => d.id === id)?.name ?? '';
   const rows = [...state.events].reverse()
     .filter(e => (!dId || e.deviceId === dId) && (!wId || e.workerId === wId))
-    .filter(e => !q || [devName(e.deviceId), e.workerId && workerName(e.workerId), e.note, e.by]
+    .filter(e => !q || [devName(e.deviceId), e.workerId && workerName(e.workerId), e.note, e.by,
+                        ...(e.changes ?? []).flatMap(c => [c.from, c.to])]
       .some(v => v && v.toLowerCase().includes(q)))
     .map(e => `<tr><td class="h-when muted num">${fmt(e.ts)}</td><td class="h-action">${EVENT_LABEL[e.type] ?? esc(e.type)}</td>
       <td class="h-device">${esc(devName(e.deviceId))}</td><td class="h-worker">${e.workerId ? esc(workerName(e.workerId)) : ''}</td>
-      <td class="h-by muted">${esc(e.by)}</td><td class="h-note">${esc(e.note ?? '')}</td></tr>`);
+      <td class="h-by muted">${esc(e.by)}</td><td class="h-note">${e.changes?.length ? diffHtml(e.changes) : esc(e.note ?? '')}</td></tr>`);
   $('#histTable tbody').innerHTML = rows.join('') || emptyRow(6, 'No events yet');
   // filter dropdowns
   const opts = (list, sel, label) => `<option value="">${label}</option>` +
@@ -883,6 +905,10 @@ if (location.hash === '#selftest') {
   assert(d.imei1 === '111' && d.imei2 === '222' && d.phone === '050', 'identifier fields stored');
   mutations.editDevice(s, d.id, { name: 'Pixel', os: '14', serial: 'X1' });
   assert(d.imei1 === '' && d.phone === '', 'edit without identifiers clears them');
+  const editEv = s.events.find(e => e.type === 'device-edited');
+  assert(editEv.changes.some(c => c.field === 'imei1' && c.from === '111' && c.to === ''), 'edit records field diffs');
+  let noop = false; try { mutations.editDevice(s, d.id, { name: 'Pixel', os: '14', serial: 'X1' }); } catch { noop = true; }
+  assert(noop && s.events.filter(e => e.type === 'device-edited').length === 1, 'no-op edit rejected, not logged');
   mutations.checkout(s, d.id, w.id, 'test');
   assert(d.status === 'checked_out' && d.holderId === w.id && d.heldSince, 'checkout sets holder');
   let threw = false; try { mutations.checkout(s, d.id, w.id); } catch { threw = true; }
