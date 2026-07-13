@@ -1,0 +1,36 @@
+name: Sync app shell from CallHub
+# The canonical index.html lives in the private CallApp-Software-Ltd/CallHub repo
+# (apps/device-tracker/index.html). This repo only hosts it on Pages (ADR-0004).
+# CALLHUB_TOKEN: any token with Contents:read on CallHub.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: sync
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch canonical index.html from CallHub
+        env:
+          GH_TOKEN: ${{ secrets.CALLHUB_TOKEN }}
+        run: |
+          gh api repos/CallApp-Software-Ltd/CallHub/contents/apps/device-tracker/index.html \
+            --jq .content | base64 -d > index.html
+          test -s index.html   # refuse to publish an empty file
+      - name: Commit and push if changed
+        run: |
+          git config user.name "sync-bot"
+          git config user.email "actions@github.com"
+          git add index.html
+          git diff --cached --quiet && echo "already up to date" || {
+            git commit -m "sync: index.html from CallHub"
+            git push
+          }
