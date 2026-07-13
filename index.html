@@ -312,13 +312,13 @@
   <section id="gate">
     <div class="gate-icon"><svg class="i" aria-hidden="true"><use href="#i-key"/></svg></div>
     <h2>Connect to GitHub</h2>
-    <p class="muted">This app stores its data in the private CallHub repo. Paste your fine-grained personal access token to start.</p>
+    <p class="muted">This app stores its data in the private CallHub repo. Paste your personal access token (classic) to start.</p>
     <ol>
-      <li>GitHub → Settings → Developer settings → <b>Fine-grained tokens</b> → Generate new token</li>
-      <li>Resource owner: <b>CallApp-Software-Ltd</b>, Repository access: <b>Only CallHub</b></li>
-      <li>Permissions → Repository → <b>Contents: Read and write</b></li>
+      <li>GitHub → Settings → Developer settings → Personal access tokens → <b>Tokens (classic)</b></li>
+      <li>Generate new token → <b>Generate new token (classic)</b></li>
+      <li>Check the <b>repo</b> scope (Full control of private repositories) → Generate</li>
     </ol>
-    <input id="tokenInput" type="password" placeholder="github_pat_…" autocomplete="off" aria-label="Personal access token">
+    <input id="tokenInput" type="password" placeholder="ghp_…" autocomplete="off" aria-label="Personal access token">
     <div class="err" id="gateErr" role="alert"></div>
     <button class="primary" id="connectBtn">Connect</button>
   </section>
@@ -516,10 +516,10 @@ const headers = () => ({ Authorization: `Bearer ${token()}`, Accept: 'applicatio
 async function loadData() {
   const res = await fetch(API, { headers: headers(), cache: 'no-store' });
   if (!res.ok) throw Error({
-    401: 'Token rejected — check its permissions (Contents: read/write on CallHub).',
-    403: 'Token rejected — check its permissions (Contents: read/write on CallHub).',
-    // GitHub answers 404 when a token cannot see a private repo (e.g. fine-grained PAT pending org approval)
-    404: 'Token can’t access CallHub. If your fine-grained token shows “Pending” under github.com/settings/personal-access-tokens, use a classic token (scope: repo) instead — see the README.',
+    401: 'Token rejected — make sure it has the “repo” scope.',
+    403: 'Token rejected — make sure it has the “repo” scope.',
+    // GitHub answers 404 when a token cannot see a private repo
+    404: 'Token can’t access CallHub. Use a classic token with the “repo” scope — see the README.',
   }[res.status] ?? `Failed to load data (HTTP ${res.status})`);
   const j = await res.json();
   sha = j.sha;
