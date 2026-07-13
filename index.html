@@ -168,6 +168,32 @@
   .badge.lost        { background: var(--badge-lost-bg);        color: var(--badge-lost-fg); }
   .badge.retired     { background: var(--badge-retired-bg);     color: var(--badge-retired-fg); }
 
+  /* SIM provider chips: desaturated brand-hue tints, AA-verified both themes.
+     Unverified brands (We4G, 012, 019, …) intentionally stay neutral. */
+  .prov { display: flex; width: fit-content; align-items: center; margin-top: 4px; padding: 2px 9px;
+          border-radius: 999px; font-size: 11px; font-weight: 600;
+          background: var(--surface-2); color: var(--muted); }
+  .prov-pelephone     { background: #dde7fe; color: #1d3ecb; }
+  .prov-cellcom       { background: #f0e4fe; color: #6d1db8; }
+  .prov-partner       { background: #d5f6f1; color: #056557; }
+  .prov-hot-mobile    { background: #ffe0e4; color: #b3122f; }
+  .prov-rami-levy     { background: #fee0f2; color: #ad1272; }
+  .prov-golan-telecom { background: #e3e8f6; color: #35447c; }
+  :root[data-theme="dark"] .prov-pelephone     { background: rgba(64, 106, 255, .18);  color: #9db6ff; }
+  :root[data-theme="dark"] .prov-cellcom       { background: rgba(150, 49, 255, .20);  color: #c9a4ff; }
+  :root[data-theme="dark"] .prov-partner       { background: rgba(46, 213, 196, .16);  color: #5fe0d0; }
+  :root[data-theme="dark"] .prov-hot-mobile    { background: rgba(228, 0, 43, .18);    color: #ff8d9d; }
+  :root[data-theme="dark"] .prov-rami-levy     { background: rgba(252, 64, 178, .16);  color: #ff96d4; }
+  :root[data-theme="dark"] .prov-golan-telecom { background: rgba(120, 140, 220, .16); color: #a8b6e8; }
+
+  /* copyable value: persistent icon so QA sees it's clickable */
+  button.copy { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none;
+                color: var(--muted); font: inherit; font-size: 11px; font-variant-numeric: tabular-nums;
+                padding: 2px 7px; margin-left: -7px; border-radius: 6px; cursor: pointer;
+                transition: background-color .15s ease, color .15s ease; }
+  button.copy svg.i { width: 12px; height: 12px; opacity: .75; }
+  button.copy:hover { background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg); }
+
   .chip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
           border-radius: 50%; background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg);
           font-size: 11px; font-weight: 700; margin-right: 7px; vertical-align: middle; }
@@ -259,6 +285,7 @@
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
 </svg>
 
 <header>
@@ -364,6 +391,7 @@
   <label>IMEI 1 (optional) <input name="imei1"></label>
   <label>IMEI 2 (optional) <input name="imei2"></label>
   <label>Phone (optional) <input name="phone" type="tel" placeholder="050-1234567"></label>
+  <label>SIM provider (optional) <select name="provider" id="providerSelect"><option value="">—</option></select></label>
   <div class="row"><button class="ghost" value="cancel" formnovalidate>Cancel</button>
   <button class="primary" value="ok">Save</button></div>
 </form></dialog>
@@ -424,7 +452,7 @@ const dev = (s, id) => { const d = s.devices.find(d => d.id === id); if (!d) thr
 const mutations = {
   addDevice(s, f) {
     const d = { id: uid('d'), name: f.name, os: f.os, serial: f.serial,
-                imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '',
+                imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '', provider: f.provider || '',
                 status: 'available', holderId: null, heldSince: null };
     s.devices.push(d);
     ev(s, 'device-added', { deviceId: d.id, note: f.name });
@@ -432,7 +460,7 @@ const mutations = {
   editDevice(s, id, f) {
     const d = dev(s, id);
     Object.assign(d, { name: f.name, os: f.os, serial: f.serial,
-                       imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '' });
+                       imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '', provider: f.provider || '' });
     ev(s, 'device-edited', { deviceId: id });
   },
   addWorker(s, name) {
@@ -537,6 +565,11 @@ const rel = ts => {
   return Math.round(h / 24) + ' days ago';
 };
 const STATUS_LABEL = { available: 'Available', checked_out: 'Checked out', lost: 'Lost', retired: 'Retired' };
+const PROVIDERS = ['Pelephone', 'Cellcom', 'Partner', 'HOT Mobile', '012 Mobile', '019 Mobile',
+                   'Golan Telecom', 'We4G', 'Rami Levy'];
+const provSlug = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+$('#providerSelect').innerHTML = '<option value="">—</option>' +
+  PROVIDERS.map(p => `<option>${p}</option>`).join('');
 const EVENT_LABEL = { 'device-added': 'Device added', 'device-edited': 'Device edited', checkout: 'Checkout',
                       checkin: 'Check-in', lost: 'Marked lost', found: 'Marked found', retired: 'Retired',
                       'worker-added': 'Worker added' };
@@ -577,7 +610,7 @@ function renderDevices() {
   const rows = state.devices
     .filter(d => showRetired ? true : d.status !== 'retired')
     .filter(d => !statusFilter || d.status === statusFilter)
-    .filter(d => !q || [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.holderId && workerName(d.holderId)]
+    .filter(d => !q || [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.provider, d.holderId && workerName(d.holderId)]
       .some(v => v && v.toLowerCase().includes(q)))
     .sort((a, b) => a.name.localeCompare(b.name)) // stable tiebreak for the column sort below
     .sort(devCompare)
@@ -594,7 +627,7 @@ function renderDevices() {
       }[d.status] + `<button class="ghost" data-a="edit">Edit</button>`;
       return `<tr data-id="${d.id}">
         <td class="c-dev"><b>${esc(d.name)}</b><span class="sub">${esc(d.os)}</span></td>
-        <td class="c-ids muted">${esc(d.serial)}${d.imei1 ? `<span class="sub">IMEI ${esc(d.imei1)}</span>` : ''}${d.imei2 ? `<span class="sub">IMEI2 ${esc(d.imei2)}</span>` : ''}${d.phone ? `<span class="sub num">${esc(d.phone)}</span>` : ''}</td>
+        <td class="c-ids muted">${esc(d.serial)}${d.imei1 ? `<span class="sub">IMEI ${esc(d.imei1)}</span>` : ''}${d.imei2 ? `<span class="sub">IMEI2 ${esc(d.imei2)}</span>` : ''}${d.phone ? `<span class="sub"><button class="copy" data-copy="${esc(d.phone)}" title="Copy phone number" aria-label="Copy phone number ${esc(d.phone)}">${esc(d.phone)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button></span>` : ''}${d.provider ? `<span class="prov prov-${provSlug(d.provider)}">${esc(d.provider)}</span>` : ''}</td>
         <td class="c-status"><span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span>${d.heldSince ? `<span class="sub" title="${esc(fmt(d.heldSince))}">${rel(d.heldSince)}</span>` : ''}</td>
         <td class="c-holder">${holder}</td>
         <td class="actions">${btns}</td></tr>`;
@@ -685,6 +718,11 @@ $('#addWorkerBtn').onclick = () =>
 
 $('#devTable').addEventListener('click', e => {
   const btn = e.target.closest('button');
+  if (btn?.dataset.copy) {
+    navigator.clipboard.writeText(btn.dataset.copy)
+      .then(() => toast('Copied ' + btn.dataset.copy), () => toast('⚠ Copy failed'));
+    return;
+  }
   const a = btn?.dataset.a;
   if (!a) return;
   const id = btn.closest('tr').dataset.id;
@@ -693,7 +731,7 @@ $('#devTable').addEventListener('click', e => {
     $('#deviceDialogTitle').textContent = 'Edit ' + d.name;
     const dlg = $('#deviceDialog');
     openForm(dlg, f => act(() => commit(`edit device ${f.name}`, s => mutations.editDevice(s, id, f))));
-    for (const k of ['name', 'os', 'serial', 'imei1', 'imei2', 'phone']) dlg.querySelector(`[name=${k}]`).value = d[k] ?? '';
+    for (const k of ['name', 'os', 'serial', 'imei1', 'imei2', 'phone', 'provider']) dlg.querySelector(`[name=${k}]`).value = d[k] ?? '';
   } else if (a === 'checkout') {
     if (!state.workers.length) return toast('Add a worker first (Workers tab)');
     $('#checkoutTitle').textContent = 'Check out ' + d.name;
@@ -779,6 +817,10 @@ if (location.hash === '#selftest') {
   threw = false; try { mutations.checkout(s, d.id, w.id); } catch { threw = true; }
   assert(threw, 'checkout of retired rejected');
   assert(s.events.length === 9, 'every action logged, got ' + s.events.length);
+  mutations.addDevice(s, { name: 'Pixel B', os: '14', serial: 'X2', provider: 'Pelephone' });
+  assert(s.devices[1].provider === 'Pelephone', 'provider stored');
+  mutations.editDevice(s, s.devices[1].id, { name: 'Pixel B', os: '14', serial: 'X2' });
+  assert(s.devices[1].provider === '' && provSlug('HOT Mobile') === 'hot-mobile', 'provider cleared on edit; slug ok');
   assert(sortVal({ status: 'lost' }, 'status') === 2 && sortVal({ holderId: null }, 'holder') === '', 'sort special keys');
   assert(sortVal({ name: 'Zebra' }, 'name') === 'zebra' && sortVal({ heldSince: null }, 'heldSince') === '', 'sort field keys');
   const savedSort = devSort;
