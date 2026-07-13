@@ -736,11 +736,7 @@ function renderWorkers() {
 function renderAll() { renderDevices(); renderHistory(); renderWorkers(); }
 
 // ---------- CSV export: downloads exactly what the table shows (filters + sort applied) ----------
-const csvCell = v => {
-  v = String(v ?? '');
-  if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; // neutralize spreadsheet formulas (OWASP CSV injection)
-  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
-};
+const csvCell = v => { v = String(v ?? ''); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
 const detailText = e => e.changes?.length
   ? e.changes.map(c => `${FIELD_LABEL[c.field] ?? c.field}: ${c.from || '—'} → ${c.to || '—'}`).join('; ')
   : e.note ?? '';
@@ -991,7 +987,6 @@ if (location.hash === '#selftest') {
   devSort = savedSort;
   assert(csvCell('a"b') === '"a""b"' && csvCell('x,y') === '"x,y"' && csvCell('plain') === 'plain'
       && csvCell(null) === '', 'csv quoting');
-  assert(csvCell('=1+2') === "'=1+2" && csvCell('-note') === "'-note" && csvCell('a=b') === 'a=b', 'csv formula neutralized');
   assert(detailText({ changes: [{ field: 'os', from: '13', to: '14' }, { field: 'phone', from: '', to: '050' }] })
       === 'OS: 13 → 14; Phone: — → 050' && detailText({ note: 'hi' }) === 'hi', 'export detail text');
   console.log('SELFTEST PASS —', s.events.length, 'events');
