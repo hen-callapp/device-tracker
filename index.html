@@ -312,6 +312,7 @@
   <symbol id="i-key" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
   <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
 </svg>
 
 <header>
@@ -355,6 +356,7 @@
       <span class="searchwrap"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
         <input type="search" id="devSearch" placeholder="Search name, OS, serial, IMEI, phone, holder…" aria-label="Search devices"></span>
       <span class="spacer"></span>
+      <button class="ghost" id="exportDevices" title="Download the current view as CSV"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Export CSV</button>
       <button class="primary" id="addDeviceBtn"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add device</button>
     </div>
     <div class="bar">
@@ -385,6 +387,7 @@
         <input type="search" id="histSearch" placeholder="Search notes, names…" aria-label="Search history"></span>
       <select id="histDevice" aria-label="Filter by device"><option value="">All devices</option></select>
       <select id="histWorker" aria-label="Filter by worker"><option value="">All workers</option></select>
+      <button class="ghost" id="exportHistory" title="Download the current view as CSV"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Export CSV</button>
     </div>
     <div class="tablewrap"><table id="histTable">
       <thead><tr><th>When</th><th>Action</th><th>Device</th><th>Worker</th><th>By</th><th>Details</th></tr></thead>
@@ -396,6 +399,7 @@
   <section id="tab-workers" hidden>
     <div class="bar">
       <span class="spacer"></span>
+      <button class="ghost" id="exportWorkers" title="Download as CSV"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Export CSV</button>
       <button class="primary" id="addWorkerBtn"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add worker</button>
     </div>
     <div class="tablewrap"><table id="workerTable">
@@ -589,6 +593,7 @@ const act = fn => fn().catch(e => toast('⚠ ' + e.message));
 // ---------- rendering ----------
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const workerName = id => state.workers.find(w => w.id === id)?.name ?? '?';
+const devName = id => state.devices.find(d => d.id === id)?.name ?? '';
 const initials = name => name.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 const fmt = ts => ts ? new Date(ts).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
 const rel = ts => {
@@ -640,9 +645,22 @@ const devCompare = (a, b) => {
 };
 const plat = d => /\b(ios|ipados|iphone|ipad)\b/i.test(d.name + ' ' + d.os) ? 'ios' : 'android';
 
+// the devices view (filters, search, sort applied) — feeds both the table and CSV export
+function visibleDevices() {
+  const q = $('#devSearch').value.toLowerCase(), showRetired = $('#showRetired').checked;
+  return state.devices
+    .filter(d => showRetired ? true : d.status !== 'retired')
+    .filter(d => !statusFilter || d.status === statusFilter)
+    .filter(d => !platFilter || plat(d) === platFilter)
+    .filter(d => !q || [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.provider, d.holderId && workerName(d.holderId)]
+      .some(v => v && v.toLowerCase().includes(q)))
+    .sort((a, b) => a.name.localeCompare(b.name)) // stable tiebreak for the column sort below
+    .sort(devCompare);
+}
+
 function renderDevices() {
   if (rowMenu.matches(':popover-open')) rowMenu.hidePopover(); // rows are about to be replaced
-  const q = $('#devSearch').value.toLowerCase(), showRetired = $('#showRetired').checked;
+  const showRetired = $('#showRetired').checked;
   if (!showRetired && statusFilter === 'retired') statusFilter = '';
   const counts = { '': 0, available: 0, checked_out: 0, lost: 0, retired: 0 };
   for (const d of state.devices) { counts[d.status]++; if (d.status !== 'retired' || showRetired) counts['']++; }
@@ -658,14 +676,7 @@ function renderDevices() {
   });
   document.querySelectorAll('#devTable th[data-k]').forEach(th =>
     th.setAttribute('aria-sort', th.dataset.k === devSort.k ? (devSort.dir === 1 ? 'ascending' : 'descending') : 'none'));
-  const rows = state.devices
-    .filter(d => showRetired ? true : d.status !== 'retired')
-    .filter(d => !statusFilter || d.status === statusFilter)
-    .filter(d => !platFilter || plat(d) === platFilter)
-    .filter(d => !q || [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.provider, d.holderId && workerName(d.holderId)]
-      .some(v => v && v.toLowerCase().includes(q)))
-    .sort((a, b) => a.name.localeCompare(b.name)) // stable tiebreak for the column sort below
-    .sort(devCompare)
+  const rows = visibleDevices()
     .map(d => {
       const holder = d.holderId
         ? `<span class="chip" aria-hidden="true">${esc(initials(workerName(d.holderId)))}</span>${esc(workerName(d.holderId))}` +
@@ -689,14 +700,19 @@ function renderDevices() {
     emptyRow(5, state.devices.length ? 'No devices match the current filters' : 'No devices yet — add the pool with “Add device”');
 }
 
-function renderHistory() {
+// the history view (filters and search applied) — feeds both the table and CSV export
+function visibleEvents() {
   const q = $('#histSearch').value.toLowerCase(), dId = $('#histDevice').value, wId = $('#histWorker').value;
-  const devName = id => state.devices.find(d => d.id === id)?.name ?? '';
-  const rows = [...state.events].reverse()
+  return [...state.events].reverse()
     .filter(e => (!dId || e.deviceId === dId) && (!wId || e.workerId === wId))
     .filter(e => !q || [devName(e.deviceId), e.workerId && workerName(e.workerId), e.note, e.by,
                         ...(e.changes ?? []).flatMap(c => [c.from, c.to])]
-      .some(v => v && v.toLowerCase().includes(q)))
+      .some(v => v && v.toLowerCase().includes(q)));
+}
+
+function renderHistory() {
+  const dId = $('#histDevice').value, wId = $('#histWorker').value;
+  const rows = visibleEvents()
     .map(e => `<tr><td class="h-when muted num">${fmt(e.ts)}</td><td class="h-action">${EVENT_LABEL[e.type] ?? esc(e.type)}</td>
       <td class="h-device">${esc(devName(e.deviceId))}</td><td class="h-worker">${e.workerId ? esc(workerName(e.workerId)) : ''}</td>
       <td class="h-by muted">${esc(e.by)}</td><td class="h-note">${e.changes?.length ? diffHtml(e.changes) : esc(e.note ?? '')}</td></tr>`);
@@ -718,6 +734,38 @@ function renderWorkers() {
 }
 
 function renderAll() { renderDevices(); renderHistory(); renderWorkers(); }
+
+// ---------- CSV export: downloads exactly what the table shows (filters + sort applied) ----------
+const csvCell = v => {
+  v = String(v ?? '');
+  if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; // neutralize spreadsheet formulas (OWASP CSV injection)
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+};
+const detailText = e => e.changes?.length
+  ? e.changes.map(c => `${FIELD_LABEL[c.field] ?? c.field}: ${c.from || '—'} → ${c.to || '—'}`).join('; ')
+  : e.note ?? '';
+function exportCsv(name, header, rows) {
+  if (!rows.length) return toast('Nothing to export');
+  // BOM so Excel reads UTF-8 (Hebrew names) correctly
+  const blob = new Blob(['\uFEFF' + [header, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n')],
+                        { type: 'text/csv' });
+  const a = Object.assign(document.createElement('a'),
+    { href: URL.createObjectURL(blob), download: `${name}-${new Date().toISOString().slice(0, 10)}.csv` });
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`Exported ${rows.length} rows`);
+}
+$('#exportDevices').onclick = () => exportCsv('devices',
+  ['Name', 'OS', 'Serial', 'IMEI 1', 'IMEI 2', 'Phone', 'SIM provider', 'Status', 'Holder', 'Held since'],
+  visibleDevices().map(d => [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.provider,
+    STATUS_LABEL[d.status], d.holderId ? workerName(d.holderId) : '', d.heldSince ?? '']));
+$('#exportHistory').onclick = () => exportCsv('history',
+  ['When', 'Action', 'Device', 'Worker', 'By', 'Details'],
+  visibleEvents().map(e => [e.ts, EVENT_LABEL[e.type] ?? e.type, devName(e.deviceId),
+    e.workerId ? workerName(e.workerId) : '', e.by ?? '', detailText(e)]));
+$('#exportWorkers').onclick = () => exportCsv('workers', ['Name', 'Currently holds'],
+  [...state.workers].sort((a, b) => a.name.localeCompare(b.name)).map(w => [w.name,
+    state.devices.filter(d => d.holderId === w.id && d.status === 'checked_out').map(d => d.name).join(', ')]));
 
 // ---------- UI wiring ----------
 function show(tab) {
@@ -941,6 +989,11 @@ if (location.hash === '#selftest') {
       && devCompare({ status: 'available', holderId: null }, { status: 'lost', holderId: null }) < 0, 'default order: in use → available → lost');
   assert(plat({ name: 'iPhone 15', os: 'iOS 18' }) === 'ios' && plat({ name: 'Pixel 7', os: 'Android 14' }) === 'android', 'platform detection');
   devSort = savedSort;
+  assert(csvCell('a"b') === '"a""b"' && csvCell('x,y') === '"x,y"' && csvCell('plain') === 'plain'
+      && csvCell(null) === '', 'csv quoting');
+  assert(csvCell('=1+2') === "'=1+2" && csvCell('-note') === "'-note" && csvCell('a=b') === 'a=b', 'csv formula neutralized');
+  assert(detailText({ changes: [{ field: 'os', from: '13', to: '14' }, { field: 'phone', from: '', to: '050' }] })
+      === 'OS: 13 → 14; Phone: — → 050' && detailText({ note: 'hi' }) === 'hi', 'export detail text');
   console.log('SELFTEST PASS —', s.events.length, 'events');
   document.title = 'SELFTEST PASS';
 }
