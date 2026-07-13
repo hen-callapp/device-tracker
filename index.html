@@ -67,8 +67,9 @@
   header .logo { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px;
                  background: rgba(0,0,0,.2); border-radius: 10px; }
   header .logo svg.i { width: 20px; height: 20px; }
+  header > div { min-width: 0; }
   header h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .01em; }
-  header .sub { font-size: 12px; margin-top: -2px; }
+  header .sub { font-size: 12px; margin-top: -2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   header .right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
   header .who { font-size: 13px; background: rgba(0,0,0,.22);
                 padding: 5px 12px; border-radius: 999px; }
@@ -216,7 +217,7 @@
     #devTable td.c-ids { grid-column: 1; grid-row: 2; }
     #devTable td.actions { grid-column: 1 / -1; grid-row: 3; display: flex; flex-wrap: wrap;
                            gap: 8px; margin-top: 8px; white-space: normal; }
-    #devTable td.actions button { margin: 0; flex: 1; min-height: 40px; }
+    #devTable td.actions button { margin: 0; flex: 1; min-width: 96px; min-height: 40px; white-space: nowrap; }
     #devTable td.empty { grid-column: 1 / -1; }
   }
   /* ---- history: stacked rows on small screens ---- */
@@ -241,6 +242,7 @@
   }
   @media (max-width: 600px) {
     header, main { padding-left: 14px; padding-right: 14px; }
+    header .who { display: none; } /* login still visible in Settings */
     dialog { min-width: 0; width: 92vw; }
   }
 </style>
@@ -713,24 +715,41 @@ $('#devTable').addEventListener('click', e => {
 });
 
 // ---------- token gate ----------
-async function connect(tok) {
-  const res = await fetch('https://api.github.com/user', {
-    headers: { Authorization: `Bearer ${tok}`, Accept: 'application/vnd.github+json' } });
-  if (!res.ok) throw Error('GitHub rejected that token.');
-  login = (await res.json()).login;
-  localStorage.setItem('dt_token', tok);
-  await loadData(); // throws if token can't reach the repo
+function enterApp() {
   $('#gate').hidden = true; $('#tabs').hidden = false;
+  show('devices');
+}
+function showGate(msg) {
+  $('#gate').hidden = false; $('#tabs').hidden = true;
+  ['devices', 'history', 'workers', 'settings'].forEach(t => $('#tab-' + t).hidden = true);
+  $('#gateErr').textContent = msg;
+}
+async function connect(tok) {
+  localStorage.setItem('dt_token', tok); // loadData/commit read the token from storage
+  const [l] = await Promise.all([
+    fetch('https://api.github.com/user', {
+      headers: { Authorization: `Bearer ${tok}`, Accept: 'application/vnd.github+json' } })
+      .then(async res => {
+        if (!res.ok) throw Error('GitHub rejected that token.');
+        return (await res.json()).login;
+      }),
+    loadData(), // throws if token can't reach the repo
+  ]);
+  login = l;
+  enterApp();
   $('#who').hidden = false;
   $('#who').textContent = login; $('#whoSettings').textContent = login;
-  show('devices');
 }
 $('#connectBtn').onclick = () => {
   $('#gateErr').textContent = '';
-  connect($('#tokenInput').value.trim()).catch(e => $('#gateErr').textContent = e.message);
+  connect($('#tokenInput').value.trim()).catch(e => showGate(e.message));
 };
 $('#disconnectBtn').onclick = () => { localStorage.removeItem('dt_token'); location.reload(); };
-if (token()) connect(token()).catch(e => { $('#gateErr').textContent = e.message; });
+if (token()) {
+  enterApp(); // returning user: skip the gate, data pops in when loadData resolves
+  $('#devTable tbody').innerHTML = emptyRow(5, 'Loading…');
+  connect(token()).catch(e => showGate(e.message));
+}
 
 // ---------- self-test: open index.html#selftest, check console ----------
 if (location.hash === '#selftest') {
