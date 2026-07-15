@@ -242,9 +242,6 @@
                    color: var(--badge-checked_out-fg); }
   .devchip:hover svg.i { color: inherit; }
   .devchip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .heldcnt { font-size: 11px; font-weight: 700; min-width: 22px; text-align: center;
-             color: var(--badge-checked_out-fg); background: var(--badge-checked_out-bg);
-             border-radius: 999px; padding: 3px 7px; }
   .muted { color: var(--muted); }
   .empty { padding: 40px 24px; text-align: center; color: var(--muted); }
   .empty svg.i { width: 28px; height: 28px; display: block; margin: 0 auto 10px; opacity: .5; }
@@ -799,7 +796,7 @@ function renderWorkers() {
     const held = state.devices.filter(d => d.holderId === w.id && d.status === 'checked_out');
     return `<tr><td><span class="chip" aria-hidden="true">${esc(initials(w.name))}</span><b>${esc(w.name)}</b></td>
       <td>${held.length
-        ? `<span class="devchips">${held.length > 1 ? `<span class="heldcnt" title="${held.length} devices">${held.length}</span>` : ''}${held.map(devChip).join('')}</span>`
+        ? `<span class="devchips">${held.map(devChip).join('')}</span>`
         : '<span class="muted">—</span>'}</td></tr>`;
   });
   $('#workerTable tbody').innerHTML = rows.join('') || emptyRow(2, 'No workers yet — add teammates so devices can be assigned');
