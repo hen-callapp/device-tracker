@@ -211,13 +211,14 @@
   :root[data-theme="dark"] .prov-rami-levy     { background: rgba(252, 64, 178, .16);  color: #ff96d4; }
   :root[data-theme="dark"] .prov-golan-telecom { background: rgba(120, 140, 220, .16); color: #a8b6e8; }
 
-  /* copyable value: persistent icon so QA sees it's clickable */
-  button.copy { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none;
-                color: var(--muted); font: inherit; font-size: 11px; font-variant-numeric: tabular-nums;
-                padding: 2px 7px; margin-left: -7px; border-radius: 6px; cursor: pointer;
-                transition: background-color .15s ease, color .15s ease; }
-  button.copy svg.i { width: 12px; height: 12px; opacity: .75; }
-  button.copy:hover { background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg); }
+  /* copyable value: persistent icon so QA sees it's clickable (a.copy = gmail account, also a real link) */
+  .copy { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none;
+          color: var(--muted); font: inherit; font-size: 11px; font-variant-numeric: tabular-nums;
+          padding: 2px 7px; margin-left: -7px; border-radius: 6px; cursor: pointer;
+          text-decoration: none;
+          transition: background-color .15s ease, color .15s ease; }
+  .copy svg.i { width: 12px; height: 12px; opacity: .75; }
+  .copy:hover { background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg); }
 
   /* gmail accounts in the Identifiers stack */
   .tag-primary { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
@@ -242,9 +243,6 @@
                    color: var(--badge-checked_out-fg); }
   .devchip:hover svg.i { color: inherit; }
   .devchip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .heldcnt { font-size: 11px; font-weight: 700; min-width: 22px; text-align: center;
-             color: var(--badge-checked_out-fg); background: var(--badge-checked_out-bg);
-             border-radius: 999px; padding: 3px 7px; }
   .muted { color: var(--muted); }
   .empty { padding: 40px 24px; text-align: center; color: var(--muted); }
   .empty svg.i { width: 28px; height: 28px; display: block; margin: 0 auto 10px; opacity: .5; }
@@ -688,7 +686,9 @@ const devCompare = (a, b) => {
 const plat = d => /\b(ios|ipados|iphone|ipad)\b/i.test(d.name + ' ' + d.os) ? 'ios' : 'android';
 
 // gmail accounts cell fragment: primary always visible + copyable, the rest behind a native <details>
-const accountBtn = a => `<button class="copy" data-copy="${esc(a)}" title="Copy account" aria-label="Copy account ${esc(a)}">${esc(a)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button>`;
+// a real <a href> so Chrome's context menu offers "Open link in Incognito window"; left-click copies instead (handler preventDefaults)
+const gmailUrl = a => 'https://accounts.google.com/AccountChooser?Email=' + encodeURIComponent(a) + '&continue=https%3A%2F%2Fmail.google.com%2F';
+const accountBtn = a => `<a class="copy" href="${gmailUrl(a)}" data-copy="${esc(a)}" title="Click to copy · right-click to open Gmail sign-in (Incognito available)" aria-label="Copy account ${esc(a)}">${esc(a)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></a>`;
 const accountsHtml = d => {
   const accs = d.accounts ?? [];
   if (!accs.length) return '';
@@ -697,6 +697,22 @@ const accountsHtml = d => {
       ? `<details class="accmore"><summary>+${accs.length - 1} more</summary>${accs.slice(1).map(a => `<span class="sub">${accountBtn(a)}</span>`).join('')}</details>`
       : '');
 };
+
+// device chip — shared by Workers and History; click jumps to the device in the Devices tab
+const devChip = d => `<button class="devchip" data-dev="${d.id}" title="View in Devices${d.heldSince ? ` · held ${rel(d.heldSince)}` : ''}"><svg class="i" aria-hidden="true"><use href="#i-device"/></svg><span class="nm">${esc(d.name)}</span></button>`;
+function showDevice(id) {
+  const d = state.devices.find(d => d.id === id);
+  if (!d) return;
+  statusFilter = ''; platFilter = '';
+  if (d.status === 'retired') $('#showRetired').checked = true;
+  $('#devSearch').value = d.name; // visible in the search box, so the narrowed list explains itself
+  show('devices');
+  renderDevices();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[data-dev]');
+  if (b) showDevice(b.dataset.dev);
+});
 
 // the devices view (filters, search, sort applied) — feeds both the table and CSV export
 function visibleDevices() {
@@ -768,7 +784,7 @@ function renderHistory() {
   const dId = $('#histDevice').value, wId = $('#histWorker').value;
   const rows = visibleEvents()
     .map(e => `<tr><td class="h-when muted num">${fmt(e.ts)}</td><td class="h-action">${EVENT_LABEL[e.type] ?? esc(e.type)}</td>
-      <td class="h-device">${esc(devName(e.deviceId))}</td><td class="h-worker">${e.workerId ? esc(workerName(e.workerId)) : ''}</td>
+      <td class="h-device">${(d => d ? devChip(d) : esc(devName(e.deviceId)))(state.devices.find(x => x.id === e.deviceId))}</td><td class="h-worker">${e.workerId ? esc(workerName(e.workerId)) : ''}</td>
       <td class="h-by muted">${esc(e.by)}</td><td class="h-note">${e.changes?.length ? diffHtml(e.changes) : esc(e.note ?? '')}</td></tr>`);
   $('#histTable tbody').innerHTML = rows.join('') || emptyRow(6, 'No events yet');
   // filter dropdowns
@@ -782,7 +798,9 @@ function renderWorkers() {
   const rows = [...state.workers].sort((a, b) => a.name.localeCompare(b.name)).map(w => {
     const held = state.devices.filter(d => d.holderId === w.id && d.status === 'checked_out');
     return `<tr><td><span class="chip" aria-hidden="true">${esc(initials(w.name))}</span><b>${esc(w.name)}</b></td>
-      <td>${held.length ? held.map(d => esc(d.name)).join(', ') : '<span class="muted">—</span>'}</td></tr>`;
+      <td>${held.length
+        ? `<span class="devchips">${held.map(devChip).join('')}</span>`
+        : '<span class="muted">—</span>'}</td></tr>`;
   });
   $('#workerTable tbody').innerHTML = rows.join('') || emptyRow(2, 'No workers yet — add teammates so devices can be assigned');
 }
@@ -918,9 +936,10 @@ rowMenu.addEventListener('click', e => {
 });
 
 $('#devTable').addEventListener('click', e => {
-  const btn = e.target.closest('button');
+  const btn = e.target.closest('button, a.copy');
   if (!btn) return;
   if (btn.dataset.copy) {
+    e.preventDefault(); // gmail <a>: left-click copies, the href is for right-click → Incognito
     navigator.clipboard.writeText(btn.dataset.copy)
       .then(() => toast('Copied ' + btn.dataset.copy), () => toast('⚠ Copy failed'));
     return;
@@ -1066,6 +1085,8 @@ if (location.hash === '#selftest') {
   assert(csvCell('=1+2') === "'=1+2" && csvCell('-note') === "'-note" && csvCell('a=b') === 'a=b', 'csv formula neutralized');
   assert(detailText({ changes: [{ field: 'os', from: '13', to: '14' }, { field: 'phone', from: '', to: '050' }] })
       === 'OS: 13 → 14; Phone: — → 050' && detailText({ note: 'hi' }) === 'hi', 'export detail text');
+  assert(gmailUrl('qa+test@gmail.com') === 'https://accounts.google.com/AccountChooser?Email=qa%2Btest%40gmail.com&continue=https%3A%2F%2Fmail.google.com%2F',
+    'gmail sign-in url encodes the address');
   console.log('SELFTEST PASS —', s.events.length, 'events');
   document.title = 'SELFTEST PASS';
 }
