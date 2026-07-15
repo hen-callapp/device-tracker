@@ -226,13 +226,39 @@
           transition: background-color .15s ease, color .15s ease; }
   .copy svg.i { width: 12px; height: 12px; opacity: .75; }
   .copy:hover { background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg); }
+  /* Contact cell: phone + primary gmail promoted to full size — the rest lives in the drawer */
+  .copy.lead { font-size: 13px; color: var(--fg); }
+  .copy.lead svg.i { width: 13px; height: 13px; }
 
-  /* gmail accounts in the Identifiers stack */
   .tag-primary { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
                  color: var(--badge-checked_out-fg); background: var(--badge-checked_out-bg);
                  border-radius: 4px; padding: 1px 5px; margin-left: 2px; vertical-align: 1px; }
-  details.accmore summary { cursor: pointer; font-size: 11px; color: var(--muted); user-select: none; }
-  details.accmore summary:hover { color: var(--fg); }
+
+  /* ---- device drawer: the read-only device home; every device reference opens it ---- */
+  #devDrawer { position: fixed; inset: 0 0 0 auto; width: min(380px, 100vw); height: 100%;
+               margin: 0; padding: 20px 22px 28px; border: 0; border-left: 1px solid var(--border);
+               background: var(--surface); color: var(--fg); box-shadow: var(--shadow-lg);
+               overflow-y: auto; overscroll-behavior: contain; }
+  #devDrawer:popover-open { animation: drawer-in .22s ease-out; }
+  @keyframes drawer-in { from { translate: 32px 0; opacity: 0; } }
+  #devDrawer::backdrop { background: rgba(2, 6, 23, .28); }
+  .d-head { display: flex; align-items: flex-start; gap: 10px; }
+  .d-head h2 { margin: 2px 0 0; font-size: 17px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+  .d-close { margin-left: auto; flex: none; border: 0; background: none; color: var(--muted);
+             width: 34px; height: 34px; border-radius: 8px; cursor: pointer;
+             display: flex; align-items: center; justify-content: center;
+             transition: background-color .15s ease, color .15s ease; }
+  .d-close:hover { background: var(--surface-2); color: var(--fg); }
+  .d-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .d-ids { margin: 20px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 12px 18px;
+           align-items: baseline; }
+  .d-ids dt { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+              color: var(--muted); }
+  .d-ids dd { margin: 0; min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
+  .d-ids .copy { font-size: 12px; color: var(--fg); }
+  .d-ids .prov { margin-top: 0; }
+  .d-links { display: flex; gap: 18px; margin-top: 24px; padding-top: 16px;
+             border-top: 1px solid var(--border); font-size: 13px; }
 
   .chip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
           border-radius: 50%; background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg);
@@ -270,6 +296,9 @@
   dialog form { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
   dialog h2 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
   dialog label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; font-weight: 500; }
+  dialog .pair { display: flex; gap: 10px; }
+  dialog .pair label { flex: 1; min-width: 0; }
+  dialog select:disabled { opacity: .55; cursor: not-allowed; }
   dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
 
   /* ---- toast ---- */
@@ -339,6 +368,7 @@
     header, main { padding-left: 14px; padding-right: 14px; }
     header .who { display: none; } /* login still visible in Settings */
     dialog { min-width: 0; width: 92vw; }
+    #devDrawer { width: 100vw; border-left: 0; }
   }
 </style>
 </head>
@@ -356,6 +386,7 @@
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
   <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
 </svg>
 
 <header>
@@ -419,7 +450,7 @@
       <label class="check"><input type="checkbox" id="showRetired"> show retired</label>
     </div>
     <div class="tablewrap"><table id="devTable">
-      <thead><tr><th data-k="name">Device</th><th data-k="serial">Identifiers</th><th data-k="status">Status</th><th data-k="holder">Holder</th><th></th></tr></thead>
+      <thead><tr><th data-k="name">Device</th><th data-k="phone">Contact</th><th data-k="status">Status</th><th data-k="holder">Holder</th><th></th></tr></thead>
       <tbody></tbody>
     </table></div>
   </section>
@@ -478,7 +509,16 @@
 <dialog id="deviceDialog" aria-labelledby="deviceDialogTitle"><form method="dialog" id="deviceForm">
   <h2 id="deviceDialogTitle">Add device</h2>
   <label>Name <input name="name" required placeholder="Pixel 7 #1"></label>
-  <label>OS version <input name="os" required placeholder="Android 14"></label>
+  <div class="pair">
+    <label>OS <select name="os" required id="osSelect">
+      <option value="" disabled selected>Select…</option>
+      <option>Android</option>
+      <option>iOS</option>
+    </select></label>
+    <label>Version <select name="osVersion" required id="osVerSelect" disabled>
+      <option value="" disabled selected>Pick OS first</option>
+    </select></label>
+  </div>
   <label>Serial <input name="serial" required></label>
   <label>IMEI 1 (optional) <input name="imei1"></label>
   <label>IMEI 2 (optional) <input name="imei2"></label>
@@ -529,6 +569,8 @@
 
 <div id="rowMenu" popover role="menu" aria-label="Device actions"></div>
 
+<aside id="devDrawer" popover aria-labelledby="drawerName"></aside>
+
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -568,6 +610,11 @@ function parseAccounts(primary, others) {
   }
   return out;
 }
+// both dropdowns are mandatory on save; migrated devices may carry osVersion '' until first edited
+function checkOsFields(f) {
+  if (f.os !== 'Android' && f.os !== 'iOS') throw Error('pick an OS');
+  if (!String(f.osVersion ?? '').trim()) throw Error('pick an OS version');
+}
 
 // ---------- roles: unlisted users are read-only Viewers; GitHub repo permissions are the real gate,
 // this only drives the UI. All permission checks go through can() so a future server can own it. ----------
@@ -577,7 +624,8 @@ const can = a => ({ edit: ['admin', 'editor'], manageRoles: ['admin'] })[a].incl
 
 const mutations = {
   addDevice(s, f) {
-    const d = { id: uid('d'), name: f.name, os: f.os, serial: f.serial,
+    checkOsFields(f);
+    const d = { id: uid('d'), name: f.name, os: f.os, osVersion: f.osVersion, serial: f.serial,
                 imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '', provider: f.provider || '',
                 accounts: parseAccounts(f.account, f.accounts),
                 status: 'available', holderId: null, heldSince: null };
@@ -585,8 +633,9 @@ const mutations = {
     ev(s, 'device-added', { deviceId: d.id, note: f.name });
   },
   editDevice(s, id, f) {
+    checkOsFields(f);
     const d = dev(s, id);
-    const next = { name: f.name, os: f.os, serial: f.serial,
+    const next = { name: f.name, os: f.os, osVersion: f.osVersion, serial: f.serial,
                    imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '', provider: f.provider || '',
                    accounts: parseAccounts(f.account, f.accounts) };
     const str = v => Array.isArray(v) ? v.join(', ') : String(v ?? ''); // accounts diff as one readable list
@@ -726,11 +775,30 @@ const PROVIDERS = ['Pelephone', 'Cellcom', 'Partner', 'HOT Mobile', '012 Mobile'
 const provSlug = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 $('#providerSelect').innerHTML = '<option value="">—</option>' +
   PROVIDERS.map(p => `<option>${p}</option>`).join('');
+// OS + version dropdowns. Stored as os ('Android'|'iOS') + osVersion ('14'); API level is display-only.
+// ponytail: version lists are constants — add a line when Android 17 / iOS 27 ship
+const API_LEVEL = { 8: 26, 9: 28, 10: 29, 11: 30, 12: 31, 13: 33, 14: 34, 15: 35, 16: 36 };
+const OS_VERSIONS = { Android: Object.keys(API_LEVEL),
+                      iOS: Array.from({ length: 14 }, (_, i) => String(13 + i)) };
+const verLabel = (os, v) => os === 'Android' ? `${v} (API ${API_LEVEL[v]})` : v;
+const osText = d => ((d.os ?? '') + (d.osVersion ? ' ' + d.osVersion : '')) +
+  (d.os === 'Android' && API_LEVEL[d.osVersion] ? ` (API ${API_LEVEL[d.osVersion]})` : '');
+function fillVersions(os, selected = '') {
+  const sel = $('#osVerSelect'), list = OS_VERSIONS[os] ?? [];
+  sel.disabled = !list.length;
+  sel.innerHTML = `<option value="" disabled selected>${list.length ? 'Select…' : 'Pick OS first'}</option>` +
+    list.map(v => `<option value="${v}">${verLabel(os, v)}</option>`).join('');
+  if (!selected) return;
+  if (!list.includes(selected)) // out-of-list legacy value: keep it selectable rather than silently drop it
+    sel.insertAdjacentHTML('beforeend', `<option value="${esc(selected)}">${esc(selected)}</option>`);
+  sel.value = selected;
+}
+$('#osSelect').addEventListener('change', e => fillVersions(e.target.value));
 const EVENT_LABEL = { 'device-added': 'Device added', 'device-edited': 'Device edited', checkout: 'Assigned',
                       checkin: 'Returned', lost: 'Marked lost', found: 'Marked found', retired: 'Retired',
                       'worker-added': 'Worker added', 'role-set': 'Role set', 'role-removed': 'Role removed' };
-const FIELD_LABEL = { name: 'Name', os: 'OS', serial: 'Serial', imei1: 'IMEI 1', imei2: 'IMEI 2',
-                      phone: 'Phone', provider: 'SIM', accounts: 'Accounts' };
+const FIELD_LABEL = { name: 'Name', os: 'OS', osVersion: 'OS version', serial: 'Serial', imei1: 'IMEI 1',
+                      imei2: 'IMEI 2', phone: 'Phone', provider: 'SIM', accounts: 'Accounts' };
 const diffSide = (v, tag) => v ? `<${tag}>${esc(v)}</${tag}>` : '<span class="muted">—</span>';
 const diffHtml = changes => changes.map(c =>
   `<span class="diff"><span class="f">${FIELD_LABEL[c.field] ?? esc(c.field)}</span>${diffSide(c.from, 'del')}<span class="to"><span class="arr" aria-hidden="true">→</span> ${diffSide(c.to, 'ins')}</span></span>`).join('');
@@ -746,6 +814,7 @@ const emptyRow = (cols, msg) =>
 
 let devSort = { k: 'status', dir: 1 }; // QA default: in use on top, lost at the bottom
 try { devSort = JSON.parse(localStorage.getItem('dt_sort2')) || devSort; } catch {}
+if (devSort.k === 'serial') devSort.k = 'phone'; // the Identifiers column became Contact
 const STATUS_ORDER = { checked_out: 0, available: 1, lost: 2, retired: 3 };
 const sortVal = (d, k) => k === 'status' ? STATUS_ORDER[d.status]
   : k === 'holder' ? (d.holderId ? workerName(d.holderId).toLowerCase() : '')
@@ -759,23 +828,24 @@ const devCompare = (a, b) => {
   return cmp(x, y) * devSort.dir
     || (devSort.k === 'status' ? cmp(sortVal(a, 'holder'), sortVal(b, 'holder')) : 0); // people A→Z within a group
 };
-const plat = d => /\b(ios|ipados|iphone|ipad)\b/i.test(d.name + ' ' + d.os) ? 'ios' : 'android';
+const plat = d => d.os === 'iOS' ? 'ios' : 'android';
 
 // gmail accounts cell fragment: primary always visible + copyable, the rest behind a native <details>
 // a real <a href> so Chrome's context menu offers "Open link in Incognito window"; left-click copies instead (handler preventDefaults)
 const gmailUrl = a => 'https://accounts.google.com/AccountChooser?Email=' + encodeURIComponent(a) + '&continue=https%3A%2F%2Fmail.google.com%2F';
-const accountBtn = a => `<a class="copy" href="${gmailUrl(a)}" data-copy="${esc(a)}" title="Click to copy · right-click to open Gmail sign-in (Incognito available)" aria-label="Copy account ${esc(a)}">${esc(a)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></a>`;
-const accountsHtml = d => {
-  const accs = d.accounts ?? [];
-  if (!accs.length) return '';
-  return `<span class="sub">${accountBtn(accs[0])}<span class="tag-primary">primary</span></span>` +
-    (accs.length > 1
-      ? `<details class="accmore"><summary>+${accs.length - 1} more</summary>${accs.slice(1).map(a => `<span class="sub">${accountBtn(a)}</span>`).join('')}</details>`
-      : '');
+const accountBtn = (a, cls = '') => `<a class="copy${cls}" href="${gmailUrl(a)}" data-copy="${esc(a)}" title="Click to copy · right-click to open Gmail sign-in (Incognito available)" aria-label="Copy account ${esc(a)}">${esc(a)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></a>`;
+const copyBtn = (v, label, cls = '') => `<button class="copy${cls}" data-copy="${esc(v)}" title="Copy ${label}" aria-label="Copy ${label} ${esc(v)}">${esc(v)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button>`;
+// Contact cell: phone + primary gmail only — everything else lives in the drawer.
+// Serial is the fallback so a device with neither is still recognizable in the column.
+const contactCell = d => {
+  const bits = [];
+  if (d.phone) bits.push(`<span class="sub">${copyBtn(d.phone, 'phone number', ' lead')}</span>`);
+  if (d.accounts?.length) bits.push(`<span class="sub">${accountBtn(d.accounts[0], ' lead')}</span>`);
+  return bits.join('') || `<span class="sub">${copyBtn(d.serial, 'serial')}</span>`;
 };
 
-// device chip — shared by Workers and History; click jumps to the device in the Devices tab
-const devChip = d => `<button class="devchip" data-dev="${d.id}" title="View in Devices${d.heldSince ? ` · held ${rel(d.heldSince)}` : ''}"><svg class="i" aria-hidden="true"><use href="#i-device"/></svg><span class="nm">${esc(d.name)}</span></button>`;
+// device chip — shared by Workers and History; click opens the device drawer in place
+const devChip = d => `<button class="devchip" data-dev="${d.id}" title="Device details${d.heldSince ? ` · held ${rel(d.heldSince)}` : ''}"><svg class="i" aria-hidden="true"><use href="#i-device"/></svg><span class="nm">${esc(d.name)}</span></button>`;
 function showDevice(id) {
   const d = state.devices.find(d => d.id === id);
   if (!d) return;
@@ -794,10 +864,66 @@ function showHistory(deviceId, workerId) {
   show('history');
   renderHistory();
 }
+
+// ---------- device drawer: read-only device home (issue #6) ----------
+const drawer = $('#devDrawer');
+function renderDrawer() {
+  const d = state?.devices.find(x => x.id === drawer.dataset.id);
+  if (!d) { if (drawer.matches(':popover-open')) drawer.hidePopover(); return; }
+  const field = (label, html) => html ? `<dt>${label}</dt><dd>${html}</dd>` : '';
+  const holder = d.holderId
+    ? `<button class="lnk" data-hworker="${d.holderId}" title="View history of ${esc(workerName(d.holderId))}">${esc(workerName(d.holderId))}</button>` +
+      (d.status === 'lost' ? ' <span class="muted">(last holder)</span>' : '')
+    : '';
+  drawer.innerHTML = `
+    <div class="d-head">
+      <div><h2 id="drawerName">${esc(d.name)}</h2><span class="sub">${esc(osText(d))}</span></div>
+      <button class="d-close" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="d-status"><span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span>${holder}${d.heldSince ? `<span class="sub" title="${esc(fmt(d.heldSince))}">${rel(d.heldSince)}</span>` : ''}</div>
+    <dl class="d-ids">
+      ${field('Serial', copyBtn(d.serial, 'serial'))}
+      ${field('IMEI 1', d.imei1 && copyBtn(d.imei1, 'IMEI 1'))}
+      ${field('IMEI 2', d.imei2 && copyBtn(d.imei2, 'IMEI 2'))}
+      ${field('Phone', d.phone && copyBtn(d.phone, 'phone number'))}
+      ${field('SIM', d.provider && `<span class="prov prov-${provSlug(d.provider)}">${esc(d.provider)}</span>`)}
+      ${field('Gmail', (d.accounts ?? []).map((a, i) =>
+        accountBtn(a) + (i === 0 && d.accounts.length > 1 ? '<span class="tag-primary">primary</span>' : '')).join('<br>'))}
+    </dl>
+    <div class="d-links">
+      <button class="lnk" data-hdev="${d.id}">View full history</button>
+      ${$('#tab-devices').hidden ? `<button class="lnk" data-goto="${d.id}">Show in Devices</button>` : ''}
+    </div>`;
+}
+function openDrawer(id) {
+  drawer.dataset.id = id;
+  renderDrawer();
+  if (!drawer.matches(':popover-open')) drawer.showPopover();
+  drawer.querySelector('.d-close').focus();
+}
+drawer.addEventListener('click', e => { if (e.target.closest('.d-close')) drawer.hidePopover(); });
+drawer.addEventListener('toggle', e => {
+  // Esc / ✕ leaves focus stranded on <body>; navigation links move it themselves
+  if (e.newState === 'closed' && drawer._trigger?.isConnected
+      && (document.activeElement === document.body || drawer.contains(document.activeElement)))
+    drawer._trigger.focus();
+});
+
+// clicks that work everywhere: copy buttons, device references, history jumps
 document.addEventListener('click', e => {
-  const b = e.target.closest('button[data-dev]');
-  if (b) return showDevice(b.dataset.dev);
+  const c = e.target.closest('[data-copy]');
+  if (c) {
+    e.preventDefault(); // gmail <a>: left-click copies, the href is for right-click → Incognito
+    navigator.clipboard.writeText(c.dataset.copy)
+      .then(() => toast('Copied ' + c.dataset.copy), () => toast('⚠ Copy failed'));
+    return;
+  }
+  const b = e.target.closest('button[data-dev], button[data-drawer]');
+  if (b) { drawer._trigger = b; return openDrawer(b.dataset.dev ?? b.dataset.drawer); }
+  const g = e.target.closest('button[data-goto]');
   const h = e.target.closest('button[data-hdev], button[data-hworker]');
+  if ((g || h) && drawer.matches(':popover-open')) drawer.hidePopover(); // navigating away
+  if (g) return showDevice(g.dataset.goto);
   if (h) showHistory(h.dataset.hdev, h.dataset.hworker);
 });
 
@@ -808,7 +934,7 @@ function visibleDevices() {
     .filter(d => showRetired ? true : d.status !== 'retired')
     .filter(d => !statusFilter || d.status === statusFilter)
     .filter(d => !platFilter || plat(d) === platFilter)
-    .filter(d => !q || [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.provider, ...(d.accounts ?? []),
+    .filter(d => !q || [d.name, osText(d), d.serial, d.imei1, d.imei2, d.phone, d.provider, ...(d.accounts ?? []),
                         d.holderId && workerName(d.holderId)]
       .some(v => v && v.toLowerCase().includes(q)))
     .sort((a, b) => a.name.localeCompare(b.name)) // stable tiebreak for the column sort below
@@ -847,8 +973,8 @@ function renderDevices() {
       }[d.status] + `<button class="ghost menu-btn" data-menu aria-haspopup="menu" aria-expanded="false"
         aria-label="More actions for ${esc(d.name)}"><svg class="i" aria-hidden="true"><use href="#i-dots"/></svg></button>`;
       return `<tr data-id="${d.id}">
-        <td class="c-dev"><button class="lnk" data-hdev="${d.id}" title="View history of ${esc(d.name)}"><b>${esc(d.name)}</b></button><span class="sub">${esc(d.os)}</span></td>
-        <td class="c-ids muted">${esc(d.serial)}${d.imei1 ? `<span class="sub">IMEI ${esc(d.imei1)}</span>` : ''}${d.imei2 ? `<span class="sub">IMEI2 ${esc(d.imei2)}</span>` : ''}${d.phone ? `<span class="sub"><button class="copy" data-copy="${esc(d.phone)}" title="Copy phone number" aria-label="Copy phone number ${esc(d.phone)}">${esc(d.phone)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button></span>` : ''}${accountsHtml(d)}${d.provider ? `<span class="prov prov-${provSlug(d.provider)}">${esc(d.provider)}</span>` : ''}</td>
+        <td class="c-dev"><button class="lnk" data-drawer="${d.id}" title="Details of ${esc(d.name)}"><b>${esc(d.name)}</b></button><span class="sub">${esc(osText(d))}</span></td>
+        <td class="c-ids muted">${contactCell(d)}</td>
         <td class="c-status"><span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span>${d.heldSince ? `<span class="sub" title="${esc(fmt(d.heldSince))}">${rel(d.heldSince)}</span>` : ''}</td>
         <td class="c-holder">${holder}</td>
         <td class="actions">${btns}</td></tr>`;
@@ -912,7 +1038,10 @@ function applyPermissions() {
   }
 }
 
-function renderAll() { applyPermissions(); renderDevices(); renderHistory(); renderWorkers(); renderRoles(); }
+function renderAll() {
+  applyPermissions(); renderDevices(); renderHistory(); renderWorkers(); renderRoles();
+  if (drawer.matches(':popover-open')) renderDrawer(); // data may have changed under an open drawer
+}
 
 // ---------- CSV export: downloads exactly what the table shows (filters + sort applied) ----------
 const csvCell = v => {
@@ -935,8 +1064,8 @@ function exportCsv(name, header, rows) {
   toast(`Exported ${rows.length} rows`);
 }
 $('#exportDevices').onclick = () => exportCsv('devices',
-  ['Name', 'OS', 'Serial', 'IMEI 1', 'IMEI 2', 'Phone', 'SIM provider', 'Primary account', 'Other accounts', 'Status', 'Holder', 'Held since'],
-  visibleDevices().map(d => [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.provider,
+  ['Name', 'OS', 'OS version', 'Serial', 'IMEI 1', 'IMEI 2', 'Phone', 'SIM provider', 'Primary account', 'Other accounts', 'Status', 'Holder', 'Held since'],
+  visibleDevices().map(d => [d.name, d.os, d.osVersion ?? '', d.serial, d.imei1, d.imei2, d.phone, d.provider,
     d.accounts?.[0] ?? '', (d.accounts ?? []).slice(1).join(', '),
     STATUS_LABEL[d.status], d.holderId ? workerName(d.holderId) : '', d.heldSince ?? '']));
 $('#exportHistory').onclick = () => exportCsv('history',
@@ -999,6 +1128,7 @@ function openForm(dialog, onOk) {
 $('#addDeviceBtn').onclick = () => {
   $('#deviceDialogTitle').textContent = 'Add device';
   openForm($('#deviceDialog'), f => act(() => commit(`add device ${f.name}`, s => mutations.addDevice(s, f))));
+  fillVersions(''); // form.reset() left the version list from the last open
 };
 $('#addWorkerBtn').onclick = () =>
   openForm($('#workerDialog'), f => act(() => commit(`add worker ${f.name}`, s => mutations.addWorker(s, f.name))));
@@ -1051,14 +1181,8 @@ rowMenu.addEventListener('click', e => {
 });
 
 $('#devTable').addEventListener('click', e => {
-  const btn = e.target.closest('button, a.copy');
-  if (!btn) return;
-  if (btn.dataset.copy) {
-    e.preventDefault(); // gmail <a>: left-click copies, the href is for right-click → Incognito
-    navigator.clipboard.writeText(btn.dataset.copy)
-      .then(() => toast('Copied ' + btn.dataset.copy), () => toast('⚠ Copy failed'));
-    return;
-  }
+  const btn = e.target.closest('button');
+  if (!btn || btn.dataset.copy) return; // copy is handled by the document-level listener
   const id = btn.closest('tr').dataset.id;
   if ('menu' in btn.dataset) openRowMenu(btn, state.devices.find(d => d.id === id));
   else if (btn.dataset.a) deviceAction(btn.dataset.a, id);
@@ -1071,7 +1195,9 @@ function deviceAction(a, id) {
     $('#deviceDialogTitle').textContent = 'Edit ' + d.name;
     const dlg = $('#deviceDialog');
     openForm(dlg, f => act(() => commit(`edit device ${f.name}`, s => mutations.editDevice(s, id, f))));
-    for (const k of ['name', 'os', 'serial', 'imei1', 'imei2', 'phone', 'provider']) dlg.querySelector(`[name=${k}]`).value = d[k] ?? '';
+    for (const k of ['name', 'serial', 'imei1', 'imei2', 'phone', 'provider']) dlg.querySelector(`[name=${k}]`).value = d[k] ?? '';
+    dlg.querySelector('[name=os]').value = d.os ?? '';
+    fillVersions(d.os, d.osVersion ?? '');
     dlg.querySelector('[name=account]').value = d.accounts?.[0] ?? '';
     dlg.querySelector('[name=accounts]').value = (d.accounts ?? []).slice(1).join('\n');
   } else if (a === 'checkout') {
@@ -1141,14 +1267,14 @@ if (location.hash === '#selftest') {
   const s = { workers: [], devices: [], events: [] };
   login = 'tester';
   mutations.addWorker(s, 'Dana');
-  mutations.addDevice(s, { name: 'Pixel', os: '14', serial: 'X1', imei1: '111', imei2: '222', phone: '050' });
+  mutations.addDevice(s, { name: 'Pixel', os: 'Android', osVersion: '14', serial: 'X1', imei1: '111', imei2: '222', phone: '050' });
   const d = s.devices[0], w = s.workers[0];
   assert(d.imei1 === '111' && d.imei2 === '222' && d.phone === '050', 'identifier fields stored');
-  mutations.editDevice(s, d.id, { name: 'Pixel', os: '14', serial: 'X1' });
+  mutations.editDevice(s, d.id, { name: 'Pixel', os: 'Android', osVersion: '14', serial: 'X1' });
   assert(d.imei1 === '' && d.phone === '', 'edit without identifiers clears them');
   const editEv = s.events.find(e => e.type === 'device-edited');
   assert(editEv.changes.some(c => c.field === 'imei1' && c.from === '111' && c.to === ''), 'edit records field diffs');
-  let noop = false; try { mutations.editDevice(s, d.id, { name: 'Pixel', os: '14', serial: 'X1' }); } catch { noop = true; }
+  let noop = false; try { mutations.editDevice(s, d.id, { name: 'Pixel', os: 'Android', osVersion: '14', serial: 'X1' }); } catch { noop = true; }
   assert(noop && s.events.filter(e => e.type === 'device-edited').length === 1, 'no-op edit rejected, not logged');
   mutations.checkout(s, d.id, w.id, 'test');
   assert(d.status === 'checked_out' && d.holderId === w.id && d.heldSince, 'checkout sets holder');
@@ -1167,9 +1293,9 @@ if (location.hash === '#selftest') {
   threw = false; try { mutations.checkout(s, d.id, w.id); } catch { threw = true; }
   assert(threw, 'checkout of retired rejected');
   assert(s.events.length === 9, 'every action logged, got ' + s.events.length);
-  mutations.addDevice(s, { name: 'Pixel B', os: '14', serial: 'X2', provider: 'Pelephone' });
+  mutations.addDevice(s, { name: 'Pixel B', os: 'Android', osVersion: '14', serial: 'X2', provider: 'Pelephone' });
   assert(s.devices[1].provider === 'Pelephone', 'provider stored');
-  mutations.editDevice(s, s.devices[1].id, { name: 'Pixel B', os: '14', serial: 'X2' });
+  mutations.editDevice(s, s.devices[1].id, { name: 'Pixel B', os: 'Android', osVersion: '14', serial: 'X2' });
   assert(s.devices[1].provider === '' && provSlug('HOT Mobile') === 'hot-mobile', 'provider cleared on edit; slug ok');
   assert(JSON.stringify(parseAccounts(' A@g.com ', 'b@g.com\n\na@G.com')) === '["A@g.com","b@g.com"]',
     'accounts parsed, trimmed, case-insensitively deduped');
@@ -1178,10 +1304,10 @@ if (location.hash === '#selftest') {
   assert(threw, 'others without a primary rejected');
   threw = false; try { parseAccounts('not-an-email', ''); } catch { threw = true; }
   assert(threw, 'invalid email rejected');
-  mutations.addDevice(s, { name: 'Pixel C', os: '14', serial: 'X3', account: 'p@g.com', accounts: 'o@g.com' });
+  mutations.addDevice(s, { name: 'Pixel C', os: 'Android', osVersion: '14', serial: 'X3', account: 'p@g.com', accounts: 'o@g.com' });
   const dc = s.devices[2];
   assert(dc.accounts.join() === 'p@g.com,o@g.com', 'accounts stored, primary first');
-  mutations.editDevice(s, dc.id, { name: 'Pixel C', os: '14', serial: 'X3', account: 'o@g.com', accounts: 'p@g.com' });
+  mutations.editDevice(s, dc.id, { name: 'Pixel C', os: 'Android', osVersion: '14', serial: 'X3', account: 'o@g.com', accounts: 'p@g.com' });
   assert(dc.accounts.join() === 'o@g.com,p@g.com', 'primary swap saved');
   const accEv = s.events.filter(e => e.type === 'device-edited').pop();
   assert(accEv.changes.some(c => c.field === 'accounts' && c.from === 'p@g.com, o@g.com' && c.to === 'o@g.com, p@g.com'),
@@ -1194,13 +1320,20 @@ if (location.hash === '#selftest') {
   devSort = { k: 'status', dir: 1 };
   assert(devCompare({ status: 'checked_out', holderId: null }, { status: 'available', holderId: null }) < 0
       && devCompare({ status: 'available', holderId: null }, { status: 'lost', holderId: null }) < 0, 'default order: in use → available → lost');
-  assert(plat({ name: 'iPhone 15', os: 'iOS 18' }) === 'ios' && plat({ name: 'Pixel 7', os: 'Android 14' }) === 'android', 'platform detection');
+  assert(plat({ os: 'iOS' }) === 'ios' && plat({ os: 'Android' }) === 'android', 'platform detection');
+  assert(osText({ os: 'Android', osVersion: '14' }) === 'Android 14 (API 34)'
+      && osText({ os: 'iOS', osVersion: '17' }) === 'iOS 17'
+      && osText({ os: 'Android', osVersion: '' }) === 'Android', 'os display text');
+  threw = false; try { mutations.addDevice(s, { name: 'Bad', os: 'Windows', osVersion: '11', serial: 'X9' }); } catch { threw = true; }
+  assert(threw && s.devices.length === 3, 'invalid OS rejected');
+  threw = false; try { mutations.addDevice(s, { name: 'Bad', os: 'iOS', serial: 'X9' }); } catch { threw = true; }
+  assert(threw && s.devices.length === 3, 'missing version rejected');
   devSort = savedSort;
   assert(csvCell('a"b') === '"a""b"' && csvCell('x,y') === '"x,y"' && csvCell('plain') === 'plain'
       && csvCell(null) === '', 'csv quoting');
   assert(csvCell('=1+2') === "'=1+2" && csvCell('-note') === "'-note" && csvCell('a=b') === 'a=b', 'csv formula neutralized');
-  assert(detailText({ changes: [{ field: 'os', from: '13', to: '14' }, { field: 'phone', from: '', to: '050' }] })
-      === 'OS: 13 → 14; Phone: — → 050' && detailText({ note: 'hi' }) === 'hi', 'export detail text');
+  assert(detailText({ changes: [{ field: 'osVersion', from: '13', to: '14' }, { field: 'phone', from: '', to: '050' }] })
+      === 'OS version: 13 → 14; Phone: — → 050' && detailText({ note: 'hi' }) === 'hi', 'export detail text');
   assert(gmailUrl('qa+test@gmail.com') === 'https://accounts.google.com/AccountChooser?Email=qa%2Btest%40gmail.com&continue=https%3A%2F%2Fmail.google.com%2F',
     'gmail sign-in url encodes the address');
   // roles
@@ -1234,7 +1367,7 @@ if (location.hash === '#selftest') {
   state = null; login = 'tester';
   // history jump: clicking a worker/device name lands on the filtered History view
   state = { roles: [], workers: [{ id: 'w1', name: 'Dana Levi' }],
-            devices: [{ id: 'd1', name: 'Pixel T', os: '14', serial: 'S', status: 'checked_out',
+            devices: [{ id: 'd1', name: 'Pixel T', os: 'Android', osVersion: '14', serial: 'S', status: 'checked_out',
                         holderId: 'w1', heldSince: now(), accounts: [] }],
             events: [{ id: 'e1', ts: now(), type: 'checkout', by: 'tester', deviceId: 'd1', workerId: 'w1' }] };
   renderAll();
@@ -1244,8 +1377,24 @@ if (location.hash === '#selftest') {
       && $('#histSearch').value === '', 'holder name jumps to worker-filtered history, search cleared');
   deviceAction('history', 'd1');
   assert($('#histDevice').value === 'd1' && !$('#histWorker').value, 'row-menu History filters to the device');
-  assert(document.querySelector('#devTable button[data-hdev]') && document.querySelector('#histTable button[data-hworker]')
+  assert(document.querySelector('#devTable button[data-drawer]') && document.querySelector('#histTable button[data-hworker]')
       && document.querySelector('#workerTable button[data-hworker]'), 'names clickable in Devices, History, Workers');
+  // device drawer: name click opens it; identifiers + serial fallback; links navigate and close it
+  assert(document.querySelector('#devTable .c-ids [data-copy="S"]'), 'contact cell falls back to serial');
+  show('devices');
+  document.querySelector('#devTable button[data-drawer]').click();
+  assert(drawer.matches(':popover-open') && drawer.textContent.includes('Pixel T')
+      && drawer.querySelector('[data-copy="S"]') && drawer.textContent.includes('Dana Levi'),
+    'device name opens drawer with serial and holder');
+  assert(!drawer.querySelector('[data-goto]'), 'no Show-in-Devices link when already on Devices');
+  drawer.querySelector('button[data-hdev]').click();
+  assert(!drawer.matches(':popover-open') && !$('#tab-history').hidden && $('#histDevice').value === 'd1',
+    'drawer history link closes drawer and filters History');
+  document.querySelector('#histTable button[data-dev]').click();
+  assert(drawer.matches(':popover-open') && !$('#tab-history').hidden, 'devchip opens drawer without leaving the tab');
+  drawer.querySelector('button[data-goto]').click();
+  assert(!drawer.matches(':popover-open') && !$('#tab-devices').hidden && $('#devSearch').value === 'Pixel T',
+    'Show in Devices closes drawer and lands on the row');
   state = null;
   console.log('SELFTEST PASS —', s.events.length, 'events');
   document.title = 'SELFTEST PASS';
