@@ -242,6 +242,9 @@
                    color: var(--badge-checked_out-fg); }
   .devchip:hover svg.i { color: inherit; }
   .devchip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .heldcnt { font-size: 11px; font-weight: 700; min-width: 22px; text-align: center;
+             color: var(--badge-checked_out-fg); background: var(--badge-checked_out-bg);
+             border-radius: 999px; padding: 3px 7px; }
   .muted { color: var(--muted); }
   .empty { padding: 40px 24px; text-align: center; color: var(--muted); }
   .empty svg.i { width: 28px; height: 28px; display: block; margin: 0 auto 10px; opacity: .5; }
@@ -695,22 +698,6 @@ const accountsHtml = d => {
       : '');
 };
 
-// device chip — shared by Workers and History; click jumps to the device in the Devices tab
-const devChip = d => `<button class="devchip" data-dev="${d.id}" title="View in Devices${d.heldSince ? ` · held ${rel(d.heldSince)}` : ''}"><svg class="i" aria-hidden="true"><use href="#i-device"/></svg><span class="nm">${esc(d.name)}</span></button>`;
-function showDevice(id) {
-  const d = state.devices.find(d => d.id === id);
-  if (!d) return;
-  statusFilter = ''; platFilter = '';
-  if (d.status === 'retired') $('#showRetired').checked = true;
-  $('#devSearch').value = d.name; // visible in the search box, so the narrowed list explains itself
-  show('devices');
-  renderDevices();
-}
-document.addEventListener('click', e => {
-  const b = e.target.closest('button[data-dev]');
-  if (b) showDevice(b.dataset.dev);
-});
-
 // the devices view (filters, search, sort applied) — feeds both the table and CSV export
 function visibleDevices() {
   const q = $('#devSearch').value.toLowerCase(), showRetired = $('#showRetired').checked;
@@ -781,7 +768,7 @@ function renderHistory() {
   const dId = $('#histDevice').value, wId = $('#histWorker').value;
   const rows = visibleEvents()
     .map(e => `<tr><td class="h-when muted num">${fmt(e.ts)}</td><td class="h-action">${EVENT_LABEL[e.type] ?? esc(e.type)}</td>
-      <td class="h-device">${(d => d ? devChip(d) : esc(devName(e.deviceId)))(state.devices.find(x => x.id === e.deviceId))}</td><td class="h-worker">${e.workerId ? esc(workerName(e.workerId)) : ''}</td>
+      <td class="h-device">${esc(devName(e.deviceId))}</td><td class="h-worker">${e.workerId ? esc(workerName(e.workerId)) : ''}</td>
       <td class="h-by muted">${esc(e.by)}</td><td class="h-note">${e.changes?.length ? diffHtml(e.changes) : esc(e.note ?? '')}</td></tr>`);
   $('#histTable tbody').innerHTML = rows.join('') || emptyRow(6, 'No events yet');
   // filter dropdowns
@@ -795,9 +782,7 @@ function renderWorkers() {
   const rows = [...state.workers].sort((a, b) => a.name.localeCompare(b.name)).map(w => {
     const held = state.devices.filter(d => d.holderId === w.id && d.status === 'checked_out');
     return `<tr><td><span class="chip" aria-hidden="true">${esc(initials(w.name))}</span><b>${esc(w.name)}</b></td>
-      <td>${held.length
-        ? `<span class="devchips">${held.map(devChip).join('')}</span>`
-        : '<span class="muted">—</span>'}</td></tr>`;
+      <td>${held.length ? held.map(d => esc(d.name)).join(', ') : '<span class="muted">—</span>'}</td></tr>`;
   });
   $('#workerTable tbody').innerHTML = rows.join('') || emptyRow(2, 'No workers yet — add teammates so devices can be assigned');
 }
