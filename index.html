@@ -72,7 +72,11 @@
   header .sub { font-size: 12px; margin-top: -2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   header .right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
   header .who { font-size: 13px; background: rgba(0,0,0,.22);
-                padding: 5px 12px; border-radius: 999px; }
+                padding: 5px 12px; border-radius: 999px;
+                display: flex; align-items: center; gap: 8px; }
+  header .who .role-tag { font-size: 10px; font-weight: 700; text-transform: uppercase;
+                          letter-spacing: .06em; background: rgba(255,255,255,.18);
+                          border-radius: 4px; padding: 1px 6px; }
   #themeBtn { background: rgba(0,0,0,.22); border: 0; color: #fff; width: 36px; height: 36px;
               border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;
               transition: background-color .18s ease; }
@@ -192,6 +196,9 @@
   .badge.checked_out { background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg); }
   .badge.lost        { background: var(--badge-lost-bg);        color: var(--badge-lost-fg); }
   .badge.retired     { background: var(--badge-retired-bg);     color: var(--badge-retired-fg); }
+  /* role badges reuse the status tints: admin = blue, editor = green */
+  .badge.admin  { background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg); }
+  .badge.editor { background: var(--badge-available-bg);   color: var(--badge-available-fg); }
 
   /* SIM provider chips: desaturated brand-hue tints, AA-verified both themes.
      Unverified brands (We4G, 012, 019, …) intentionally stay neutral. */
@@ -355,6 +362,7 @@
   <button data-tab="devices" class="active" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-device"/></svg>Devices</button>
   <button data-tab="history"><svg class="i" aria-hidden="true"><use href="#i-history"/></svg>History</button>
   <button data-tab="workers"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg>Workers</button>
+  <button data-tab="roles" hidden><svg class="i" aria-hidden="true"><use href="#i-key"/></svg>Roles</button>
   <button data-tab="settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg>Settings</button>
 </nav>
 <main>
@@ -368,6 +376,7 @@
       <li>Generate new token → <b>Generate new token (classic)</b></li>
       <li>Check the <b>repo</b> scope (Full control of private repositories) → Generate</li>
     </ol>
+    <p class="muted">View-only access? A fine-grained token with read-only <b>Contents</b> permission on CallHub works too.</p>
     <input id="tokenInput" type="password" placeholder="ghp_…" autocomplete="off" aria-label="Personal access token">
     <div class="err" id="gateErr" role="alert"></div>
     <button class="primary" id="connectBtn">Connect</button>
@@ -431,6 +440,19 @@
     </table></div>
   </section>
 
+  <!-- roles (admin only) -->
+  <section id="tab-roles" hidden>
+    <div class="bar">
+      <span class="muted">Anyone not listed is a read-only <b>Viewer</b>. Write access also requires repo write permission on GitHub.</span>
+      <span class="spacer"></span>
+      <button class="primary" id="addRoleBtn"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add role</button>
+    </div>
+    <div class="tablewrap"><table id="roleTable">
+      <thead><tr><th>GitHub user</th><th>Role</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
   <!-- settings -->
   <section id="tab-settings" hidden>
     <p>Connected as <b id="whoSettings"></b>.</p>
@@ -479,6 +501,18 @@
   <button class="primary" value="ok">Add</button></div>
 </form></dialog>
 
+<!-- add role -->
+<dialog id="roleDialog" aria-labelledby="roleDialogTitle"><form method="dialog" id="roleForm">
+  <h2 id="roleDialogTitle">Add role</h2>
+  <label>GitHub username <input name="id" required placeholder="octocat" autocomplete="off"></label>
+  <label>Role <select name="role">
+    <option value="editor">Editor — read + edit</option>
+    <option value="admin">Admin — read + edit + manage roles</option>
+  </select></label>
+  <div class="row"><button class="ghost" value="cancel" formnovalidate>Cancel</button>
+  <button class="primary" value="ok">Add</button></div>
+</form></dialog>
+
 <div id="rowMenu" popover role="menu" aria-label="Device actions"></div>
 
 <div id="toast" role="status" aria-live="polite"></div>
@@ -520,6 +554,12 @@ function parseAccounts(primary, others) {
   }
   return out;
 }
+
+// ---------- roles: unlisted users are read-only Viewers; GitHub repo permissions are the real gate,
+// this only drives the UI. All permission checks go through can() so a future server can own it. ----------
+const ROLE_LABEL = { admin: 'Admin', editor: 'Editor', viewer: 'Viewer' };
+const roleOf = id => state?.roles.find(r => r.id.toLowerCase() === String(id ?? '').toLowerCase())?.role ?? 'viewer';
+const can = a => ({ edit: ['admin', 'editor'], manageRoles: ['admin'] })[a].includes(roleOf(login));
 
 const mutations = {
   addDevice(s, f) {
@@ -579,6 +619,25 @@ const mutations = {
     d.status = 'retired'; d.holderId = null; d.heldSince = null;
     ev(s, 'retired', { deviceId, note });
   },
+  setRole(s, id, role) {
+    id = String(id ?? '').trim().replace(/^@/, '');
+    if (!id) throw Error('enter a GitHub username');
+    if (role !== 'admin' && role !== 'editor') throw Error('invalid role');
+    const r = s.roles.find(r => r.id.toLowerCase() === id.toLowerCase());
+    if (r && r.role === role) throw Error(`${r.id} is already ${ROLE_LABEL[role]}`);
+    if (r?.role === 'admin' && !s.roles.some(x => x !== r && x.role === 'admin'))
+      throw Error('cannot demote the last admin');
+    if (r) r.role = role; else s.roles.push({ id, role });
+    ev(s, 'role-set', { note: `${r?.id ?? id} → ${ROLE_LABEL[role]}` });
+  },
+  removeRole(s, id) {
+    const i = s.roles.findIndex(r => r.id === id);
+    if (i < 0) throw Error('role not found');
+    if (s.roles[i].role === 'admin' && !s.roles.some((x, j) => j !== i && x.role === 'admin'))
+      throw Error('cannot remove the last admin');
+    s.roles.splice(i, 1);
+    ev(s, 'role-removed', { note: `${id} → Viewer` });
+  },
 };
 
 // ---------- GitHub I/O ----------
@@ -603,6 +662,7 @@ async function loadData() {
   const j = await res.json();
   sha = j.sha;
   state = JSON.parse(b64decode(j.content));
+  state.roles ??= []; // schema 1 → 2
   renderAll();
 }
 
@@ -623,6 +683,8 @@ async function commit(message, mutate) {
       return;
     }
     if (res.status === 409 || res.status === 422) { await loadData(); continue; } // someone else wrote first
+    if (res.status === 403 || res.status === 404) // fine-grained read-only tokens get 404 on PUT
+      throw Error('Your token has no write access — ask an admin for edit access.');
     throw Error(`Save failed (HTTP ${res.status})`);
   }
   throw Error('Save failed after 3 attempts — refresh and try again.');
@@ -652,7 +714,7 @@ $('#providerSelect').innerHTML = '<option value="">—</option>' +
   PROVIDERS.map(p => `<option>${p}</option>`).join('');
 const EVENT_LABEL = { 'device-added': 'Device added', 'device-edited': 'Device edited', checkout: 'Assigned',
                       checkin: 'Returned', lost: 'Marked lost', found: 'Marked found', retired: 'Retired',
-                      'worker-added': 'Worker added' };
+                      'worker-added': 'Worker added', 'role-set': 'Role set', 'role-removed': 'Role removed' };
 const FIELD_LABEL = { name: 'Name', os: 'OS', serial: 'Serial', imei1: 'IMEI 1', imei2: 'IMEI 2',
                       phone: 'Phone', provider: 'SIM', accounts: 'Accounts' };
 const diffSide = (v, tag) => v ? `<${tag}>${esc(v)}</${tag}>` : '<span class="muted">—</span>';
@@ -752,7 +814,7 @@ function renderDevices() {
         ? `<span class="chip" aria-hidden="true">${esc(initials(workerName(d.holderId)))}</span>${esc(workerName(d.holderId))}` +
           (d.status === 'lost' ? ' <span class="muted">(last holder)</span>' : '')
         : '<span class="muted">—</span>';
-      const btns = {
+      const btns = !can('edit') ? '' : {
         available:   `<button class="primary" data-a="checkout">Assign</button>`,
         checked_out: `<button class="primary" data-a="checkin">Return</button>`,
         lost:        `<button class="primary" data-a="found">Found</button>`,
@@ -805,7 +867,28 @@ function renderWorkers() {
   $('#workerTable tbody').innerHTML = rows.join('') || emptyRow(2, 'No workers yet — add teammates so devices can be assigned');
 }
 
-function renderAll() { renderDevices(); renderHistory(); renderWorkers(); }
+function renderRoles() {
+  const rows = [...state.roles].sort((a, b) => a.id.localeCompare(b.id)).map(r => `<tr>
+    <td><span class="chip" aria-hidden="true">${esc(r.id.slice(0, 2).toUpperCase())}</span><b>${esc(r.id)}</b>${r.id.toLowerCase() === (login ?? '').toLowerCase() ? ' <span class="muted">(you)</span>' : ''}</td>
+    <td><span class="badge ${r.role}">${ROLE_LABEL[r.role]}</span></td>
+    <td class="actions">
+      <button class="ghost" data-role="${r.role === 'admin' ? 'editor' : 'admin'}" data-id="${esc(r.id)}">Make ${r.role === 'admin' ? 'Editor' : 'Admin'}</button>
+      <button class="ghost danger" data-rm="${esc(r.id)}">Remove</button></td></tr>`);
+  $('#roleTable tbody').innerHTML = rows.join('') || emptyRow(3, 'No roles yet — everyone is a read-only Viewer');
+}
+
+// role gating is UI-only (GitHub repo permissions are the real gate) — hide, don't disable
+function applyPermissions() {
+  $('#addDeviceBtn').hidden = $('#addWorkerBtn').hidden = !can('edit');
+  $('#tabs [data-tab="roles"]').hidden = !can('manageRoles');
+  if (!can('manageRoles') && !$('#tab-roles').hidden) show('devices'); // demoted while on the tab
+  if (login) {
+    $('#who').innerHTML = `${esc(login)}<span class="role-tag">${ROLE_LABEL[roleOf(login)]}</span>`;
+    $('#whoSettings').textContent = `${login} (${ROLE_LABEL[roleOf(login)]})`;
+  }
+}
+
+function renderAll() { applyPermissions(); renderDevices(); renderHistory(); renderWorkers(); renderRoles(); }
 
 // ---------- CSV export: downloads exactly what the table shows (filters + sort applied) ----------
 const csvCell = v => {
@@ -847,7 +930,7 @@ function show(tab) {
     b.classList.toggle('active', on);
     if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
-  ['devices', 'history', 'workers', 'settings'].forEach(t => $('#tab-' + t).hidden = t !== tab);
+  ['devices', 'history', 'workers', 'roles', 'settings'].forEach(t => $('#tab-' + t).hidden = t !== tab);
 }
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('button');
@@ -895,6 +978,14 @@ $('#addDeviceBtn').onclick = () => {
 };
 $('#addWorkerBtn').onclick = () =>
   openForm($('#workerDialog'), f => act(() => commit(`add worker ${f.name}`, s => mutations.addWorker(s, f.name))));
+$('#addRoleBtn').onclick = () =>
+  openForm($('#roleDialog'), f => act(() => commit(`set role ${f.id.trim()} → ${f.role}`, s => mutations.setRole(s, f.id, f.role))));
+$('#roleTable').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.rm) act(() => commit(`remove role ${b.dataset.rm}`, s => mutations.removeRole(s, b.dataset.rm)));
+  else if (b.dataset.role) act(() => commit(`set role ${b.dataset.id} → ${b.dataset.role}`, s => mutations.setRole(s, b.dataset.id, b.dataset.role)));
+});
 
 // ---------- row action menu (one shared popover, filled per device status) ----------
 const rowMenu = $('#rowMenu');
@@ -985,7 +1076,7 @@ function enterApp() {
 }
 function showGate(msg) {
   $('#gate').hidden = false; $('#tabs').hidden = true;
-  ['devices', 'history', 'workers', 'settings'].forEach(t => $('#tab-' + t).hidden = true);
+  ['devices', 'history', 'workers', 'roles', 'settings'].forEach(t => $('#tab-' + t).hidden = true);
   $('#gateErr').textContent = msg;
 }
 async function connect(tok) {
@@ -1002,7 +1093,7 @@ async function connect(tok) {
   login = l;
   enterApp();
   $('#who').hidden = false;
-  $('#who').textContent = login; $('#whoSettings').textContent = login;
+  renderAll(); // role badge + edit controls depend on login, which loadData didn't have yet
 }
 $('#connectBtn').onclick = async () => {
   const btn = $('#connectBtn');
@@ -1087,6 +1178,35 @@ if (location.hash === '#selftest') {
       === 'OS: 13 → 14; Phone: — → 050' && detailText({ note: 'hi' }) === 'hi', 'export detail text');
   assert(gmailUrl('qa+test@gmail.com') === 'https://accounts.google.com/AccountChooser?Email=qa%2Btest%40gmail.com&continue=https%3A%2F%2Fmail.google.com%2F',
     'gmail sign-in url encodes the address');
+  // roles
+  s.roles = [];
+  mutations.setRole(s, ' @Alice ', 'admin');
+  assert(s.roles[0].id === 'Alice' && s.roles[0].role === 'admin', 'role added, @/whitespace stripped');
+  threw = false; try { mutations.setRole(s, 'alice', 'editor'); } catch { threw = true; }
+  assert(threw, 'last admin cannot be demoted');
+  threw = false; try { mutations.removeRole(s, 'Alice'); } catch { threw = true; }
+  assert(threw, 'last admin cannot be removed');
+  mutations.setRole(s, 'bob', 'admin');
+  mutations.setRole(s, 'ALICE', 'editor');
+  assert(s.roles.length === 2 && s.roles[0].id === 'Alice' && s.roles[0].role === 'editor',
+    'case-insensitive update keeps original id');
+  threw = false; try { mutations.setRole(s, 'Alice', 'editor'); } catch { threw = true; }
+  assert(threw, 'no-op role change rejected');
+  mutations.removeRole(s, 'Alice');
+  assert(s.roles.length === 1 && s.roles[0].id === 'bob', 'demoted admin removable');
+  threw = false; try { mutations.setRole(s, 'x', 'boss'); } catch { threw = true; }
+  assert(threw, 'invalid role rejected');
+  threw = false; try { mutations.setRole(s, '  ', 'editor'); } catch { threw = true; }
+  assert(threw, 'blank username rejected');
+  assert(s.events.filter(e => e.type === 'role-set').length === 3
+      && s.events.filter(e => e.type === 'role-removed').length === 1, 'role changes audited');
+  state = { roles: [{ id: 'Bob', role: 'editor' }] };
+  assert(roleOf('bob') === 'editor' && roleOf('nobody') === 'viewer' && roleOf(null) === 'viewer', 'roleOf defaults to viewer');
+  login = 'bob';
+  assert(can('edit') && !can('manageRoles'), 'editor can edit, not manage roles');
+  login = 'nobody';
+  assert(!can('edit'), 'viewer cannot edit');
+  state = null; login = 'tester';
   console.log('SELFTEST PASS —', s.events.length, 'events');
   document.title = 'SELFTEST PASS';
 }
