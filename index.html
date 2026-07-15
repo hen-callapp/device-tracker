@@ -227,7 +227,7 @@
   .copy svg.i { width: 12px; height: 12px; opacity: .75; }
   .copy:hover { background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg); }
   /* Contact cell: phone + primary gmail promoted to full size — the rest lives in the drawer */
-  .copy.lead { font-size: 13px; color: var(--fg); }
+  .lead { font-size: 13px; color: var(--fg); }
   .copy.lead svg.i { width: 13px; height: 13px; }
 
   .tag-primary { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
@@ -834,14 +834,19 @@ const plat = d => d.os === 'iOS' ? 'ios' : 'android';
 // a real <a href> so Chrome's context menu offers "Open link in Incognito window"; left-click copies instead (handler preventDefaults)
 const gmailUrl = a => 'https://accounts.google.com/AccountChooser?Email=' + encodeURIComponent(a) + '&continue=https%3A%2F%2Fmail.google.com%2F';
 const accountBtn = (a, cls = '') => `<a class="copy${cls}" href="${gmailUrl(a)}" data-copy="${esc(a)}" title="Click to copy · right-click to open Gmail sign-in (Incognito available)" aria-label="Copy account ${esc(a)}">${esc(a)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></a>`;
-const copyBtn = (v, label, cls = '') => `<button class="copy${cls}" data-copy="${esc(v)}" title="Copy ${label}" aria-label="Copy ${label} ${esc(v)}">${esc(v)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button>`;
+const copyBtn = (v, label, cls = '') => !String(v ?? '').trim() ? '' : // no copy button for empty values
+  `<button class="copy${cls}" data-copy="${esc(v)}" title="Copy ${label}" aria-label="Copy ${label} ${esc(v)}">${esc(v)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button>`;
+// the phone field sometimes holds a note ("Idan Private SIM") — only number-ish values get a copy button
+const phoneHtml = (v, cls = '') => /^\+?[\d\s().-]+$/.test(v.trim())
+  ? copyBtn(v, 'phone number', cls)
+  : `<span class="${cls.trim()}">${esc(v)}</span>`;
 // Contact cell: phone + primary gmail only — everything else lives in the drawer.
 // Serial is the fallback so a device with neither is still recognizable in the column.
 const contactCell = d => {
   const bits = [];
-  if (d.phone) bits.push(`<span class="sub">${copyBtn(d.phone, 'phone number', ' lead')}</span>`);
+  if (d.phone) bits.push(`<span class="sub">${phoneHtml(d.phone, ' lead')}</span>`);
   if (d.accounts?.length) bits.push(`<span class="sub">${accountBtn(d.accounts[0], ' lead')}</span>`);
-  return bits.join('') || `<span class="sub">${copyBtn(d.serial, 'serial')}</span>`;
+  return bits.join('') || `<span class="sub">${copyBtn(d.serial, 'serial') || '—'}</span>`;
 };
 
 // device chip — shared by Workers and History; click opens the device drawer in place
@@ -885,7 +890,7 @@ function renderDrawer() {
       ${field('Serial', copyBtn(d.serial, 'serial'))}
       ${field('IMEI 1', d.imei1 && copyBtn(d.imei1, 'IMEI 1'))}
       ${field('IMEI 2', d.imei2 && copyBtn(d.imei2, 'IMEI 2'))}
-      ${field('Phone', d.phone && copyBtn(d.phone, 'phone number'))}
+      ${field('Phone', d.phone && phoneHtml(d.phone))}
       ${field('SIM', d.provider && `<span class="prov prov-${provSlug(d.provider)}">${esc(d.provider)}</span>`)}
       ${field('Gmail', (d.accounts ?? []).map((a, i) =>
         accountBtn(a) + (i === 0 && d.accounts.length > 1 ? '<span class="tag-primary">primary</span>' : '')).join('<br>'))}
@@ -1381,6 +1386,10 @@ if (location.hash === '#selftest') {
       && document.querySelector('#workerTable button[data-hworker]'), 'names clickable in Devices, History, Workers');
   // device drawer: name click opens it; identifiers + serial fallback; links navigate and close it
   assert(document.querySelector('#devTable .c-ids [data-copy="S"]'), 'contact cell falls back to serial');
+  assert(copyBtn('', 'x') === '' && copyBtn('  ', 'x') === '', 'empty values get no copy button');
+  assert(!phoneHtml('Idan Private SIM').includes('data-copy') && phoneHtml('Idan Private SIM').includes('Idan')
+      && phoneHtml(' +972 (50) 123-4567 ').includes('data-copy'), 'phone notes render as text, numbers stay copyable');
+  assert(contactCell({ serial: '', accounts: [] }).includes('—'), 'device with no identifiers shows a dash, nothing copyable');
   show('devices');
   document.querySelector('#devTable button[data-drawer]').click();
   assert(drawer.matches(':popover-open') && drawer.textContent.includes('Pixel T')
