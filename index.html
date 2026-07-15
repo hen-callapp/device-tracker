@@ -250,6 +250,12 @@
                    color: var(--badge-checked_out-fg); }
   .devchip:hover svg.i { color: inherit; }
   .devchip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* clickable name — jumps to the History tab filtered to that device/worker
+     (chips still mean "go to this device"; names mean "its history") */
+  .lnk { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer;
+         text-align: left; text-decoration: underline dotted var(--muted); text-underline-offset: 3px;
+         transition: color .15s ease; }
+  .lnk:hover { color: var(--primary); text-decoration: underline solid; }
   .muted { color: var(--muted); }
   .empty { padding: 40px 24px; text-align: center; color: var(--muted); }
   .empty svg.i { width: 28px; height: 28px; display: block; margin: 0 auto 10px; opacity: .5; }
@@ -272,6 +278,13 @@
            box-shadow: var(--shadow-lg); opacity: 0; transition: opacity .22s ease, transform .22s ease;
            pointer-events: none; max-width: 90vw; font-weight: 500; }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---- settings ---- */
+  #tab-settings { max-width: 760px; }
+  #tab-settings h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px;
+                     font-size: 15px; font-weight: 600; }
+  #tab-settings h2 svg.i { width: 16px; height: 16px; color: var(--muted); }
+  #rolesSection { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--border); }
 
   /* ---- token gate ---- */
   #gate { max-width: 520px; margin: 56px auto; background: var(--surface); border: 1px solid var(--border);
@@ -362,7 +375,6 @@
   <button data-tab="devices" class="active" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-device"/></svg>Devices</button>
   <button data-tab="history"><svg class="i" aria-hidden="true"><use href="#i-history"/></svg>History</button>
   <button data-tab="workers"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg>Workers</button>
-  <button data-tab="roles" hidden><svg class="i" aria-hidden="true"><use href="#i-key"/></svg>Roles</button>
   <button data-tab="settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg>Settings</button>
 </nav>
 <main>
@@ -440,23 +452,25 @@
     </table></div>
   </section>
 
-  <!-- roles (admin only) -->
-  <section id="tab-roles" hidden>
-    <div class="bar">
-      <span class="muted">Anyone not listed is a read-only <b>Viewer</b>. Write access also requires repo write permission on GitHub.</span>
-      <span class="spacer"></span>
-      <button class="primary" id="addRoleBtn"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add role</button>
-    </div>
-    <div class="tablewrap"><table id="roleTable">
-      <thead><tr><th>GitHub user</th><th>Role</th><th></th></tr></thead>
-      <tbody></tbody>
-    </table></div>
-  </section>
-
   <!-- settings -->
   <section id="tab-settings" hidden>
+    <h2><svg class="i" aria-hidden="true"><use href="#i-users"/></svg>Account</h2>
     <p>Connected as <b id="whoSettings"></b>.</p>
     <button class="ghost danger" id="disconnectBtn">Disconnect (forget token)</button>
+
+    <!-- roles (admin only) -->
+    <div id="rolesSection" hidden>
+      <h2><svg class="i" aria-hidden="true"><use href="#i-key"/></svg>Roles</h2>
+      <div class="bar">
+        <span class="muted">Anyone not listed is a read-only <b>Viewer</b>. Write access also requires repo write permission on GitHub.</span>
+        <span class="spacer"></span>
+        <button class="primary" id="addRoleBtn"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add role</button>
+      </div>
+      <div class="tablewrap"><table id="roleTable">
+        <thead><tr><th>GitHub user</th><th>Role</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
   </section>
 </main>
 
@@ -771,9 +785,20 @@ function showDevice(id) {
   show('devices');
   renderDevices();
 }
+// mirror of showDevice: jump to History pre-filtered to a device or worker;
+// search and the other dropdown are cleared so the landing view explains itself
+function showHistory(deviceId, workerId) {
+  $('#histSearch').value = '';
+  $('#histDevice').value = deviceId ?? '';
+  $('#histWorker').value = workerId ?? '';
+  show('history');
+  renderHistory();
+}
 document.addEventListener('click', e => {
   const b = e.target.closest('button[data-dev]');
-  if (b) showDevice(b.dataset.dev);
+  if (b) return showDevice(b.dataset.dev);
+  const h = e.target.closest('button[data-hdev], button[data-hworker]');
+  if (h) showHistory(h.dataset.hdev, h.dataset.hworker);
 });
 
 // the devices view (filters, search, sort applied) — feeds both the table and CSV export
@@ -811,7 +836,7 @@ function renderDevices() {
   const rows = visibleDevices()
     .map(d => {
       const holder = d.holderId
-        ? `<span class="chip" aria-hidden="true">${esc(initials(workerName(d.holderId)))}</span>${esc(workerName(d.holderId))}` +
+        ? `<span class="chip" aria-hidden="true">${esc(initials(workerName(d.holderId)))}</span><button class="lnk" data-hworker="${d.holderId}" title="View history of ${esc(workerName(d.holderId))}">${esc(workerName(d.holderId))}</button>` +
           (d.status === 'lost' ? ' <span class="muted">(last holder)</span>' : '')
         : '<span class="muted">—</span>';
       const btns = !can('edit') ? '' : {
@@ -822,7 +847,7 @@ function renderDevices() {
       }[d.status] + `<button class="ghost menu-btn" data-menu aria-haspopup="menu" aria-expanded="false"
         aria-label="More actions for ${esc(d.name)}"><svg class="i" aria-hidden="true"><use href="#i-dots"/></svg></button>`;
       return `<tr data-id="${d.id}">
-        <td class="c-dev"><b>${esc(d.name)}</b><span class="sub">${esc(d.os)}</span></td>
+        <td class="c-dev"><button class="lnk" data-hdev="${d.id}" title="View history of ${esc(d.name)}"><b>${esc(d.name)}</b></button><span class="sub">${esc(d.os)}</span></td>
         <td class="c-ids muted">${esc(d.serial)}${d.imei1 ? `<span class="sub">IMEI ${esc(d.imei1)}</span>` : ''}${d.imei2 ? `<span class="sub">IMEI2 ${esc(d.imei2)}</span>` : ''}${d.phone ? `<span class="sub"><button class="copy" data-copy="${esc(d.phone)}" title="Copy phone number" aria-label="Copy phone number ${esc(d.phone)}">${esc(d.phone)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button></span>` : ''}${accountsHtml(d)}${d.provider ? `<span class="prov prov-${provSlug(d.provider)}">${esc(d.provider)}</span>` : ''}</td>
         <td class="c-status"><span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span>${d.heldSince ? `<span class="sub" title="${esc(fmt(d.heldSince))}">${rel(d.heldSince)}</span>` : ''}</td>
         <td class="c-holder">${holder}</td>
@@ -846,7 +871,7 @@ function renderHistory() {
   const dId = $('#histDevice').value, wId = $('#histWorker').value;
   const rows = visibleEvents()
     .map(e => `<tr><td class="h-when muted num">${fmt(e.ts)}</td><td class="h-action">${EVENT_LABEL[e.type] ?? esc(e.type)}</td>
-      <td class="h-device">${(d => d ? devChip(d) : esc(devName(e.deviceId)))(state.devices.find(x => x.id === e.deviceId))}</td><td class="h-worker">${e.workerId ? esc(workerName(e.workerId)) : ''}</td>
+      <td class="h-device">${(d => d ? devChip(d) : esc(devName(e.deviceId)))(state.devices.find(x => x.id === e.deviceId))}</td><td class="h-worker">${e.workerId ? `<button class="lnk" data-hworker="${e.workerId}" title="Filter to ${esc(workerName(e.workerId))}">${esc(workerName(e.workerId))}</button>` : ''}</td>
       <td class="h-by muted">${esc(e.by)}</td><td class="h-note">${e.changes?.length ? diffHtml(e.changes) : esc(e.note ?? '')}</td></tr>`);
   $('#histTable tbody').innerHTML = rows.join('') || emptyRow(6, 'No events yet');
   // filter dropdowns
@@ -859,7 +884,7 @@ function renderHistory() {
 function renderWorkers() {
   const rows = [...state.workers].sort((a, b) => a.name.localeCompare(b.name)).map(w => {
     const held = state.devices.filter(d => d.holderId === w.id && d.status === 'checked_out');
-    return `<tr><td><span class="chip" aria-hidden="true">${esc(initials(w.name))}</span><b>${esc(w.name)}</b></td>
+    return `<tr><td><span class="chip" aria-hidden="true">${esc(initials(w.name))}</span><button class="lnk" data-hworker="${w.id}" title="View history of ${esc(w.name)}"><b>${esc(w.name)}</b></button></td>
       <td>${held.length
         ? `<span class="devchips">${held.map(devChip).join('')}</span>`
         : '<span class="muted">—</span>'}</td></tr>`;
@@ -880,8 +905,7 @@ function renderRoles() {
 // role gating is UI-only (GitHub repo permissions are the real gate) — hide, don't disable
 function applyPermissions() {
   $('#addDeviceBtn').hidden = $('#addWorkerBtn').hidden = !can('edit');
-  $('#tabs [data-tab="roles"]').hidden = !can('manageRoles');
-  if (!can('manageRoles') && !$('#tab-roles').hidden) show('devices'); // demoted while on the tab
+  $('#rolesSection').hidden = !can('manageRoles');
   if (login) {
     $('#who').innerHTML = `${esc(login)}<span class="role-tag">${ROLE_LABEL[roleOf(login)]}</span>`;
     $('#whoSettings').textContent = `${login} (${ROLE_LABEL[roleOf(login)]})`;
@@ -930,7 +954,7 @@ function show(tab) {
     b.classList.toggle('active', on);
     if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
-  ['devices', 'history', 'workers', 'roles', 'settings'].forEach(t => $('#tab-' + t).hidden = t !== tab);
+  ['devices', 'history', 'workers', 'settings'].forEach(t => $('#tab-' + t).hidden = t !== tab);
 }
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('button');
@@ -990,10 +1014,10 @@ $('#roleTable').addEventListener('click', e => {
 // ---------- row action menu (one shared popover, filled per device status) ----------
 const rowMenu = $('#rowMenu');
 const MENU_ITEMS = {
-  available:   [['edit', 'Edit'], ['lost', 'Mark lost', 'danger'], ['retire', 'Retire']],
-  checked_out: [['edit', 'Edit'], ['lost', 'Mark lost', 'danger']],
-  lost:        [['edit', 'Edit'], ['retire', 'Retire']],
-  retired:     [['edit', 'Edit']],
+  available:   [['edit', 'Edit'], ['history', 'History'], ['lost', 'Mark lost', 'danger'], ['retire', 'Retire']],
+  checked_out: [['edit', 'Edit'], ['history', 'History'], ['lost', 'Mark lost', 'danger']],
+  lost:        [['edit', 'Edit'], ['history', 'History'], ['retire', 'Retire']],
+  retired:     [['edit', 'Edit'], ['history', 'History']],
 };
 function openRowMenu(btn, d) {
   rowMenu.innerHTML = MENU_ITEMS[d.status].map(([a, label, cls]) =>
@@ -1042,6 +1066,7 @@ $('#devTable').addEventListener('click', e => {
 
 function deviceAction(a, id) {
   const d = state.devices.find(d => d.id === id);
+  if (a === 'history') return showHistory(id);
   if (a === 'edit') {
     $('#deviceDialogTitle').textContent = 'Edit ' + d.name;
     const dlg = $('#deviceDialog');
@@ -1076,7 +1101,7 @@ function enterApp() {
 }
 function showGate(msg) {
   $('#gate').hidden = false; $('#tabs').hidden = true;
-  ['devices', 'history', 'workers', 'roles', 'settings'].forEach(t => $('#tab-' + t).hidden = true);
+  ['devices', 'history', 'workers', 'settings'].forEach(t => $('#tab-' + t).hidden = true);
   $('#gateErr').textContent = msg;
 }
 async function connect(tok) {
@@ -1207,6 +1232,21 @@ if (location.hash === '#selftest') {
   login = 'nobody';
   assert(!can('edit'), 'viewer cannot edit');
   state = null; login = 'tester';
+  // history jump: clicking a worker/device name lands on the filtered History view
+  state = { roles: [], workers: [{ id: 'w1', name: 'Dana Levi' }],
+            devices: [{ id: 'd1', name: 'Pixel T', os: '14', serial: 'S', status: 'checked_out',
+                        holderId: 'w1', heldSince: now(), accounts: [] }],
+            events: [{ id: 'e1', ts: now(), type: 'checkout', by: 'tester', deviceId: 'd1', workerId: 'w1' }] };
+  renderAll();
+  $('#histSearch').value = 'stale';
+  document.querySelector('#devTable button[data-hworker]').click();
+  assert(!$('#tab-history').hidden && $('#histWorker').value === 'w1' && !$('#histDevice').value
+      && $('#histSearch').value === '', 'holder name jumps to worker-filtered history, search cleared');
+  deviceAction('history', 'd1');
+  assert($('#histDevice').value === 'd1' && !$('#histWorker').value, 'row-menu History filters to the device');
+  assert(document.querySelector('#devTable button[data-hdev]') && document.querySelector('#histTable button[data-hworker]')
+      && document.querySelector('#workerTable button[data-hworker]'), 'names clickable in Devices, History, Workers');
+  state = null;
   console.log('SELFTEST PASS —', s.events.length, 'events');
   document.title = 'SELFTEST PASS';
 }
