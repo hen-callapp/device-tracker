@@ -97,11 +97,12 @@
   .searchwrap { position: relative; flex: 1; min-width: 220px; }
   .searchwrap svg.i { position: absolute; left: 11px; top: 50%; translate: 0 -50%;
                       width: 16px; height: 16px; color: var(--muted); pointer-events: none; }
-  input[type=search], input[type=password], select, dialog input, dialog select {
+  input[type=search], input[type=password], select, dialog input, dialog select, dialog textarea {
     padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit;
     background: var(--surface); color: var(--fg); min-height: 40px;
     transition: border-color .18s ease, background-color .25s ease, box-shadow .18s ease;
   }
+  dialog textarea { resize: vertical; }
   input[type=search] { width: 100%; padding-left: 34px; }
   input:focus-visible, select:focus-visible, button:focus-visible {
     outline: 2px solid var(--ring); outline-offset: 2px; }
@@ -218,16 +219,40 @@
   button.copy svg.i { width: 12px; height: 12px; opacity: .75; }
   button.copy:hover { background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg); }
 
+  /* gmail accounts in the Identifiers stack */
+  .tag-primary { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+                 color: var(--badge-checked_out-fg); background: var(--badge-checked_out-bg);
+                 border-radius: 4px; padding: 1px 5px; margin-left: 2px; vertical-align: 1px; }
+  details.accmore summary { cursor: pointer; font-size: 11px; color: var(--muted); user-select: none; }
+  details.accmore summary:hover { color: var(--fg); }
+
   .chip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
           border-radius: 50%; background: var(--badge-checked_out-bg); color: var(--badge-checked_out-fg);
           font-size: 11px; font-weight: 700; margin-right: 7px; vertical-align: middle; }
+
+  /* device chip: the one way a device is referenced outside the Devices table — click jumps to it */
+  .devchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .devchip { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; min-height: 28px;
+             border: 1px solid var(--border); background: var(--surface); color: var(--fg);
+             border-radius: 999px; padding: 2px 11px 2px 9px; font: inherit; font-size: 12px;
+             font-weight: 500; cursor: pointer;
+             transition: background-color .15s ease, border-color .15s ease, color .15s ease; }
+  .devchip svg.i { width: 13px; height: 13px; color: var(--muted); }
+  .devchip:hover { background: var(--badge-checked_out-bg); border-color: transparent;
+                   color: var(--badge-checked_out-fg); }
+  .devchip:hover svg.i { color: inherit; }
+  .devchip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .heldcnt { font-size: 11px; font-weight: 700; min-width: 22px; text-align: center;
+             color: var(--badge-checked_out-fg); background: var(--badge-checked_out-bg);
+             border-radius: 999px; padding: 3px 7px; }
   .muted { color: var(--muted); }
   .empty { padding: 40px 24px; text-align: center; color: var(--muted); }
   .empty svg.i { width: 28px; height: 28px; display: block; margin: 0 auto 10px; opacity: .5; }
 
   /* ---- dialogs ---- */
   dialog { border: 0; border-radius: 14px; padding: 0; box-shadow: var(--shadow-lg);
-           min-width: 360px; max-width: 92vw; background: var(--surface); color: var(--fg); }
+           min-width: 360px; max-width: 92vw; max-height: 90vh; overflow: auto;
+           background: var(--surface); color: var(--fg); }
   dialog::backdrop { background: rgba(2, 6, 23, .55); backdrop-filter: blur(2px); }
   dialog[open] { animation: pop .2s ease-out; }
   @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
@@ -354,7 +379,7 @@
   <section id="tab-devices" hidden>
     <div class="bar">
       <span class="searchwrap"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
-        <input type="search" id="devSearch" placeholder="Search name, OS, serial, IMEI, phone, holder…" aria-label="Search devices"></span>
+        <input type="search" id="devSearch" placeholder="Search name, OS, serial, IMEI, phone, account, holder…" aria-label="Search devices"></span>
       <span class="spacer"></span>
       <button class="ghost" id="exportDevices" title="Download the current view as CSV"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Export CSV</button>
       <button class="primary" id="addDeviceBtn"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add device</button>
@@ -425,6 +450,8 @@
   <label>IMEI 2 (optional) <input name="imei2"></label>
   <label>Phone (optional) <input name="phone" type="tel" placeholder="050-1234567"></label>
   <label>SIM provider (optional) <select name="provider" id="providerSelect"><option value="">—</option></select></label>
+  <label>Primary Gmail (optional) <input name="account" type="email" placeholder="qa.device@gmail.com" autocomplete="off"></label>
+  <label>Other Gmail accounts (optional, one per line) <textarea name="accounts" rows="2" autocomplete="off"></textarea></label>
   <div class="row"><button class="ghost" value="cancel" formnovalidate>Cancel</button>
   <button class="primary" value="ok">Save</button></div>
 </form></dialog>
@@ -483,11 +510,24 @@ const now = () => new Date().toISOString();
 const uid = p => p + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const ev = (s, type, fields) => s.events.push({ id: uid('e'), ts: now(), type, by: login, ...fields });
 const dev = (s, id) => { const d = s.devices.find(d => d.id === id); if (!d) throw Error('device not found'); return d; };
+// form → accounts array; accounts[0] is the primary (structural invariant: primary exists iff any account does)
+function parseAccounts(primary, others) {
+  primary = String(primary ?? '').trim();
+  const rest = String(others ?? '').split('\n').map(s => s.trim()).filter(Boolean);
+  if (!primary && rest.length) throw Error('enter a primary Gmail first');
+  const out = [];
+  for (const a of [primary, ...rest].filter(Boolean)) {
+    if (!/^\S+@\S+\.\S+$/.test(a)) throw Error(`“${a}” is not an email address`);
+    if (!out.some(x => x.toLowerCase() === a.toLowerCase())) out.push(a);
+  }
+  return out;
+}
 
 const mutations = {
   addDevice(s, f) {
     const d = { id: uid('d'), name: f.name, os: f.os, serial: f.serial,
                 imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '', provider: f.provider || '',
+                accounts: parseAccounts(f.account, f.accounts),
                 status: 'available', holderId: null, heldSince: null };
     s.devices.push(d);
     ev(s, 'device-added', { deviceId: d.id, note: f.name });
@@ -495,9 +535,11 @@ const mutations = {
   editDevice(s, id, f) {
     const d = dev(s, id);
     const next = { name: f.name, os: f.os, serial: f.serial,
-                   imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '', provider: f.provider || '' };
-    const changes = Object.keys(next).filter(k => (d[k] ?? '') !== next[k])
-      .map(k => ({ field: k, from: d[k] ?? '', to: next[k] }));
+                   imei1: f.imei1 || '', imei2: f.imei2 || '', phone: f.phone || '', provider: f.provider || '',
+                   accounts: parseAccounts(f.account, f.accounts) };
+    const str = v => Array.isArray(v) ? v.join(', ') : String(v ?? ''); // accounts diff as one readable list
+    const changes = Object.keys(next).filter(k => str(d[k]) !== str(next[k]))
+      .map(k => ({ field: k, from: str(d[k]), to: str(next[k]) }));
     if (!changes.length) throw Error('no changes to save');
     Object.assign(d, next);
     ev(s, 'device-edited', { deviceId: id, changes });
@@ -614,7 +656,7 @@ const EVENT_LABEL = { 'device-added': 'Device added', 'device-edited': 'Device e
                       checkin: 'Returned', lost: 'Marked lost', found: 'Marked found', retired: 'Retired',
                       'worker-added': 'Worker added' };
 const FIELD_LABEL = { name: 'Name', os: 'OS', serial: 'Serial', imei1: 'IMEI 1', imei2: 'IMEI 2',
-                      phone: 'Phone', provider: 'SIM' };
+                      phone: 'Phone', provider: 'SIM', accounts: 'Accounts' };
 const diffSide = (v, tag) => v ? `<${tag}>${esc(v)}</${tag}>` : '<span class="muted">—</span>';
 const diffHtml = changes => changes.map(c =>
   `<span class="diff"><span class="f">${FIELD_LABEL[c.field] ?? esc(c.field)}</span>${diffSide(c.from, 'del')}<span class="to"><span class="arr" aria-hidden="true">→</span> ${diffSide(c.to, 'ins')}</span></span>`).join('');
@@ -645,6 +687,33 @@ const devCompare = (a, b) => {
 };
 const plat = d => /\b(ios|ipados|iphone|ipad)\b/i.test(d.name + ' ' + d.os) ? 'ios' : 'android';
 
+// gmail accounts cell fragment: primary always visible + copyable, the rest behind a native <details>
+const accountBtn = a => `<button class="copy" data-copy="${esc(a)}" title="Copy account" aria-label="Copy account ${esc(a)}">${esc(a)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button>`;
+const accountsHtml = d => {
+  const accs = d.accounts ?? [];
+  if (!accs.length) return '';
+  return `<span class="sub">${accountBtn(accs[0])}<span class="tag-primary">primary</span></span>` +
+    (accs.length > 1
+      ? `<details class="accmore"><summary>+${accs.length - 1} more</summary>${accs.slice(1).map(a => `<span class="sub">${accountBtn(a)}</span>`).join('')}</details>`
+      : '');
+};
+
+// device chip — shared by Workers and History; click jumps to the device in the Devices tab
+const devChip = d => `<button class="devchip" data-dev="${d.id}" title="View in Devices${d.heldSince ? ` · held ${rel(d.heldSince)}` : ''}"><svg class="i" aria-hidden="true"><use href="#i-device"/></svg><span class="nm">${esc(d.name)}</span></button>`;
+function showDevice(id) {
+  const d = state.devices.find(d => d.id === id);
+  if (!d) return;
+  statusFilter = ''; platFilter = '';
+  if (d.status === 'retired') $('#showRetired').checked = true;
+  $('#devSearch').value = d.name; // visible in the search box, so the narrowed list explains itself
+  show('devices');
+  renderDevices();
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[data-dev]');
+  if (b) showDevice(b.dataset.dev);
+});
+
 // the devices view (filters, search, sort applied) — feeds both the table and CSV export
 function visibleDevices() {
   const q = $('#devSearch').value.toLowerCase(), showRetired = $('#showRetired').checked;
@@ -652,7 +721,8 @@ function visibleDevices() {
     .filter(d => showRetired ? true : d.status !== 'retired')
     .filter(d => !statusFilter || d.status === statusFilter)
     .filter(d => !platFilter || plat(d) === platFilter)
-    .filter(d => !q || [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.provider, d.holderId && workerName(d.holderId)]
+    .filter(d => !q || [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.provider, ...(d.accounts ?? []),
+                        d.holderId && workerName(d.holderId)]
       .some(v => v && v.toLowerCase().includes(q)))
     .sort((a, b) => a.name.localeCompare(b.name)) // stable tiebreak for the column sort below
     .sort(devCompare);
@@ -691,7 +761,7 @@ function renderDevices() {
         aria-label="More actions for ${esc(d.name)}"><svg class="i" aria-hidden="true"><use href="#i-dots"/></svg></button>`;
       return `<tr data-id="${d.id}">
         <td class="c-dev"><b>${esc(d.name)}</b><span class="sub">${esc(d.os)}</span></td>
-        <td class="c-ids muted">${esc(d.serial)}${d.imei1 ? `<span class="sub">IMEI ${esc(d.imei1)}</span>` : ''}${d.imei2 ? `<span class="sub">IMEI2 ${esc(d.imei2)}</span>` : ''}${d.phone ? `<span class="sub"><button class="copy" data-copy="${esc(d.phone)}" title="Copy phone number" aria-label="Copy phone number ${esc(d.phone)}">${esc(d.phone)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button></span>` : ''}${d.provider ? `<span class="prov prov-${provSlug(d.provider)}">${esc(d.provider)}</span>` : ''}</td>
+        <td class="c-ids muted">${esc(d.serial)}${d.imei1 ? `<span class="sub">IMEI ${esc(d.imei1)}</span>` : ''}${d.imei2 ? `<span class="sub">IMEI2 ${esc(d.imei2)}</span>` : ''}${d.phone ? `<span class="sub"><button class="copy" data-copy="${esc(d.phone)}" title="Copy phone number" aria-label="Copy phone number ${esc(d.phone)}">${esc(d.phone)}<svg class="i" aria-hidden="true"><use href="#i-copy"/></svg></button></span>` : ''}${accountsHtml(d)}${d.provider ? `<span class="prov prov-${provSlug(d.provider)}">${esc(d.provider)}</span>` : ''}</td>
         <td class="c-status"><span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span>${d.heldSince ? `<span class="sub" title="${esc(fmt(d.heldSince))}">${rel(d.heldSince)}</span>` : ''}</td>
         <td class="c-holder">${holder}</td>
         <td class="actions">${btns}</td></tr>`;
@@ -714,7 +784,7 @@ function renderHistory() {
   const dId = $('#histDevice').value, wId = $('#histWorker').value;
   const rows = visibleEvents()
     .map(e => `<tr><td class="h-when muted num">${fmt(e.ts)}</td><td class="h-action">${EVENT_LABEL[e.type] ?? esc(e.type)}</td>
-      <td class="h-device">${esc(devName(e.deviceId))}</td><td class="h-worker">${e.workerId ? esc(workerName(e.workerId)) : ''}</td>
+      <td class="h-device">${(d => d ? devChip(d) : esc(devName(e.deviceId)))(state.devices.find(x => x.id === e.deviceId))}</td><td class="h-worker">${e.workerId ? esc(workerName(e.workerId)) : ''}</td>
       <td class="h-by muted">${esc(e.by)}</td><td class="h-note">${e.changes?.length ? diffHtml(e.changes) : esc(e.note ?? '')}</td></tr>`);
   $('#histTable tbody').innerHTML = rows.join('') || emptyRow(6, 'No events yet');
   // filter dropdowns
@@ -728,7 +798,9 @@ function renderWorkers() {
   const rows = [...state.workers].sort((a, b) => a.name.localeCompare(b.name)).map(w => {
     const held = state.devices.filter(d => d.holderId === w.id && d.status === 'checked_out');
     return `<tr><td><span class="chip" aria-hidden="true">${esc(initials(w.name))}</span><b>${esc(w.name)}</b></td>
-      <td>${held.length ? held.map(d => esc(d.name)).join(', ') : '<span class="muted">—</span>'}</td></tr>`;
+      <td>${held.length
+        ? `<span class="devchips">${held.length > 1 ? `<span class="heldcnt" title="${held.length} devices">${held.length}</span>` : ''}${held.map(devChip).join('')}</span>`
+        : '<span class="muted">—</span>'}</td></tr>`;
   });
   $('#workerTable tbody').innerHTML = rows.join('') || emptyRow(2, 'No workers yet — add teammates so devices can be assigned');
 }
@@ -756,8 +828,9 @@ function exportCsv(name, header, rows) {
   toast(`Exported ${rows.length} rows`);
 }
 $('#exportDevices').onclick = () => exportCsv('devices',
-  ['Name', 'OS', 'Serial', 'IMEI 1', 'IMEI 2', 'Phone', 'SIM provider', 'Status', 'Holder', 'Held since'],
+  ['Name', 'OS', 'Serial', 'IMEI 1', 'IMEI 2', 'Phone', 'SIM provider', 'Primary account', 'Other accounts', 'Status', 'Holder', 'Held since'],
   visibleDevices().map(d => [d.name, d.os, d.serial, d.imei1, d.imei2, d.phone, d.provider,
+    d.accounts?.[0] ?? '', (d.accounts ?? []).slice(1).join(', '),
     STATUS_LABEL[d.status], d.holderId ? workerName(d.holderId) : '', d.heldSince ?? '']));
 $('#exportHistory').onclick = () => exportCsv('history',
   ['When', 'Action', 'Device', 'Worker', 'By', 'Details'],
@@ -882,6 +955,8 @@ function deviceAction(a, id) {
     const dlg = $('#deviceDialog');
     openForm(dlg, f => act(() => commit(`edit device ${f.name}`, s => mutations.editDevice(s, id, f))));
     for (const k of ['name', 'os', 'serial', 'imei1', 'imei2', 'phone', 'provider']) dlg.querySelector(`[name=${k}]`).value = d[k] ?? '';
+    dlg.querySelector('[name=account]').value = d.accounts?.[0] ?? '';
+    dlg.querySelector('[name=accounts]').value = (d.accounts ?? []).slice(1).join('\n');
   } else if (a === 'checkout') {
     if (!state.workers.length) return toast('Add a worker first (Workers tab)');
     $('#checkoutTitle').textContent = 'Assign ' + d.name;
@@ -979,6 +1054,21 @@ if (location.hash === '#selftest') {
   assert(s.devices[1].provider === 'Pelephone', 'provider stored');
   mutations.editDevice(s, s.devices[1].id, { name: 'Pixel B', os: '14', serial: 'X2' });
   assert(s.devices[1].provider === '' && provSlug('HOT Mobile') === 'hot-mobile', 'provider cleared on edit; slug ok');
+  assert(JSON.stringify(parseAccounts(' A@g.com ', 'b@g.com\n\na@G.com')) === '["A@g.com","b@g.com"]',
+    'accounts parsed, trimmed, case-insensitively deduped');
+  assert(parseAccounts('', '').length === 0, 'no accounts is fine');
+  threw = false; try { parseAccounts('', 'b@g.com'); } catch { threw = true; }
+  assert(threw, 'others without a primary rejected');
+  threw = false; try { parseAccounts('not-an-email', ''); } catch { threw = true; }
+  assert(threw, 'invalid email rejected');
+  mutations.addDevice(s, { name: 'Pixel C', os: '14', serial: 'X3', account: 'p@g.com', accounts: 'o@g.com' });
+  const dc = s.devices[2];
+  assert(dc.accounts.join() === 'p@g.com,o@g.com', 'accounts stored, primary first');
+  mutations.editDevice(s, dc.id, { name: 'Pixel C', os: '14', serial: 'X3', account: 'o@g.com', accounts: 'p@g.com' });
+  assert(dc.accounts.join() === 'o@g.com,p@g.com', 'primary swap saved');
+  const accEv = s.events.filter(e => e.type === 'device-edited').pop();
+  assert(accEv.changes.some(c => c.field === 'accounts' && c.from === 'p@g.com, o@g.com' && c.to === 'o@g.com, p@g.com'),
+    'accounts edit logged as one list diff');
   assert(sortVal({ status: 'lost' }, 'status') === 2 && sortVal({ holderId: null }, 'holder') === '', 'sort special keys');
   assert(sortVal({ name: 'Zebra' }, 'name') === 'zebra' && sortVal({ heldSince: null }, 'heldSince') === '', 'sort field keys');
   const savedSort = devSort;
