@@ -211,12 +211,14 @@
   .prov-hot-mobile    { background: #ffe0e4; color: #b3122f; }
   .prov-rami-levy     { background: #fee0f2; color: #ad1272; }
   .prov-golan-telecom { background: #e3e8f6; color: #35447c; }
+  .prov-sky            { background: #daf2fb; color: #0c6a8a; }
   :root[data-theme="dark"] .prov-pelephone     { background: rgba(64, 106, 255, .18);  color: #9db6ff; }
   :root[data-theme="dark"] .prov-cellcom       { background: rgba(150, 49, 255, .20);  color: #c9a4ff; }
   :root[data-theme="dark"] .prov-partner       { background: rgba(46, 213, 196, .16);  color: #5fe0d0; }
   :root[data-theme="dark"] .prov-hot-mobile    { background: rgba(228, 0, 43, .18);    color: #ff8d9d; }
   :root[data-theme="dark"] .prov-rami-levy     { background: rgba(252, 64, 178, .16);  color: #ff96d4; }
   :root[data-theme="dark"] .prov-golan-telecom { background: rgba(120, 140, 220, .16); color: #a8b6e8; }
+  :root[data-theme="dark"] .prov-sky            { background: rgba(12, 160, 210, .18); color: #7ad4f0; }
 
   /* copyable value: persistent icon so QA sees it's clickable (a.copy = gmail account, also a real link) */
   .copy { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none;
@@ -771,7 +773,7 @@ const rel = ts => {
 };
 const STATUS_LABEL = { available: 'Available', checked_out: 'In use', lost: 'Lost', retired: 'Retired' };
 const PROVIDERS = ['Pelephone', 'Cellcom', 'Partner', 'HOT Mobile', '012 Mobile', '019 Mobile',
-                   'Golan Telecom', 'We4G', 'Rami Levy'];
+                   'Golan Telecom', 'We4G', 'Rami Levy', 'SKY'];
 const provSlug = name => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 $('#providerSelect').innerHTML = '<option value="">—</option>' +
   PROVIDERS.map(p => `<option>${p}</option>`).join('');
