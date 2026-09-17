@@ -777,7 +777,7 @@ $('#providerSelect').innerHTML = '<option value="">—</option>' +
   PROVIDERS.map(p => `<option>${p}</option>`).join('');
 // OS + version dropdowns. Stored as os ('Android'|'iOS') + osVersion ('14'); API level is display-only.
 // ponytail: version lists are constants — add a line when Android 17 / iOS 27 ship
-const API_LEVEL = { 8: 26, 9: 28, 10: 29, 11: 30, 12: 31, 13: 33, 14: 34, 15: 35, 16: 36 };
+const API_LEVEL = { 8: 26, 9: 28, 10: 29, 11: 30, 12: 31, 13: 33, 14: 34, 15: 35, 16: 36, 17: 37 };
 const OS_VERSIONS = { Android: Object.keys(API_LEVEL),
                       iOS: Array.from({ length: 14 }, (_, i) => String(13 + i)) };
 const verLabel = (os, v) => os === 'Android' ? `${v} (API ${API_LEVEL[v]})` : v;
